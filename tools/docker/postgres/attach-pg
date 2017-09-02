@@ -1,0 +1,2 @@
+echo "Password is 'password'"
+docker run -it --rm --link nts-postgres postgres psql -h nts-postgres -U nts

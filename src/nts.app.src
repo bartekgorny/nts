@@ -1,0 +1,18 @@
+{application, nts,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { nts_app, []}},
+  {applications,
+   [jiffy,
+    kernel,
+    lager,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.

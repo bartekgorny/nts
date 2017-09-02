@@ -1,0 +1,1 @@
+/opt/local/lib/postgresql96/bin/pg_dump -h 127.0.0.1 -p 5432 -U nts -s nts

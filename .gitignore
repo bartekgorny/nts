@@ -1,0 +1,8 @@
+rebar.lock
+*swp
+*iml
+lastrun
+log
+logs
+_build
+.idea

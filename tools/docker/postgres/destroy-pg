@@ -1,0 +1,3 @@
+docker stop nts-postgres
+docker rm nts-postgres
+docker rmi postgres:nts
