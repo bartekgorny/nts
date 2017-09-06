@@ -15,6 +15,7 @@
 -export([query/1, history/1, history/3, save_loc/3]).
 -export([frames/3, save_frame/2, update_loc/3, update_state/2]).
 -export([current_state/1, last_loc/2]).
+-export([save_event/1, event_log/4, delete_events/3]).
 
 
 query(Q) ->
@@ -77,7 +78,7 @@ save_loc(DevId, Loc, Frame) ->
         "(dtm, coords, data, hex, frame, received) values (" ++
         quote(time2string((Loc#loc.dtm))) ++
         "," ++
-        io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
+        quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
         "," ++
         quote(to_json(Loc#loc.data)) ++
         "," ++
@@ -123,7 +124,7 @@ update_state(DevId, Loc) ->
         "," ++
         quote(time2string((Loc#loc.dtm))) ++
         "," ++
-        io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
+        quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
         "," ++
         quote(to_json(Loc#loc.data)) ++
         ") ON CONFLICT ( device ) DO UPDATE SET " ++
@@ -167,6 +168,48 @@ last_loc(DevId, Dtm) ->
             end
     end.
 
+-spec save_event(event()) -> ok | {error, atom()}.
+save_event(#event{} = E) ->
+    Q = "INSERT INTO events" ++
+        "(device, dtm, coords, type, data) values (" ++
+        quote(binary_to_list(E#event.device)) ++
+        "," ++
+        quote(time2string((E#event.dtm))) ++
+        "," ++
+        quote(encode_coords(E#event.lat, E#event.lon)) ++
+        "," ++
+        quote(encode_event_type(E#event.type)) ++
+        "," ++
+        quote(to_json(E#event.data)) ++
+        ")",
+    query(Q).
+
+-spec event_log(devid(), eventtype(), datetime(), datetime()) -> [event()] | {error, atom()}.
+event_log(DevId, EType, Start, Stop) ->
+    Q = "SELECT id, device, dtm, coords, type, data FROM events" ++
+        " WHERE dtm > " ++
+        quote(time2string(Start)) ++
+        " AND dtm < " ++
+        quote(time2string(Stop)) ++
+        " AND device = " ++ quote(DevId) ++
+        " AND type LIKE '" ++ encode_event_type(EType) ++ "%'" ++
+        " ORDER BY dtm",
+    case query(Q) of
+        {error, E} -> {error, E};
+        {_, Vals} ->
+            lists:map(fun parse_event/1, Vals)
+    end.
+
+-spec delete_events(devid(), datetime(), datetime()) -> ok | {error, atom()}.
+delete_events(DevId, Start, Stop) ->
+    Q = "DELETE FROM events" ++
+        " WHERE dtm > " ++
+        quote(time2string(Start)) ++
+        " AND dtm < " ++
+        quote(time2string(Stop)) ++
+        " AND device = " ++ quote(DevId),
+    query(Q).
+
 %% helpers
 
 quote(S) when is_binary(S) ->
@@ -206,6 +249,9 @@ parse_binary_coords(Coords) ->
         )
     ),
     {Lat, Lon}.
+
+encode_coords(Lat, Lon) ->
+    io_lib:format("(~p, ~p)", [Lat, Lon]).
 
 -spec parse_binary_datetime(binary()) -> datetime().
 parse_binary_datetime(R) ->
@@ -255,4 +301,23 @@ log_query(Q) ->
         _ ->
             ok
     end.
+
+encode_event_type(Tags) ->
+    H = atom_to_list(hd(Tags)),
+    Qs = lists:foldl(fun(B, Acc) -> Acc ++ ":" ++ atom_to_list(B) end, [H], tl(Tags)),
+    lists:flatten(Qs).
+
+decode_event_type(BType) ->
+    lists:map(fun(B) -> binary_to_existing_atom(B, utf8) end,
+              binary:split(BType, <<":">>)).
+
+parse_event({BId, DevId, BDtm, BCoords, BType, BData}) ->
+    Id = binary_to_integer(BId),
+    Dtm = parse_binary_datetime(BDtm),
+    {Lat, Lon} = parse_binary_coords(BCoords),
+    Type = decode_event_type(BType),
+    Data = nts_utils:json_decode_map(BData),
+    #event{id = Id, device = DevId, dtm = Dtm, lat = Lat, lon = Lon, type = Type, data = Data}.
+
+
 

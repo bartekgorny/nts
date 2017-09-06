@@ -16,13 +16,13 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [metrics].
+%%    [current_state].
     [config, locs_and_frames, frames_and_updates, current_state, concurrency,
-     errors, metrics].
+     errors, metrics, events].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
-    nts_helpers:clear_tables(["device_01", "current"]),
+    nts_helpers:clear_tables(["device_01", "current", "events"]),
     C.
 
 config(_) ->
@@ -140,6 +140,21 @@ metrics(_) ->
     ct:pal("Stop: ~p", [Stop]),
     ?assertEqual([2, 2, 1, 1], metric_dif(Start, Stop)).
 
+events(_) ->
+    Loc = generate_location(-5),
+    Evt = #event{dtm = Loc#loc.dtm, device = ?DEVID, type = [event, sample],
+        lat = Loc#loc.lat, lon = Loc#loc.lon, data = Loc#loc.data},
+    nts_db:save_event(Evt),
+    [E1] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
+    ?assertEqual(?DEVID, E1#event.device),
+    ?assertEqual(Loc#loc.dtm, E1#event.dtm),
+    ?assertEqual(Loc#loc.lat, E1#event.lat),
+    ?assertEqual(Loc#loc.lon, E1#event.lon),
+    ?assertEqual(-5, maps:get(<<"offset">>, E1#event.data)),
+    ?assertEqual([event, sample], E1#event.type),
+    ok = nts_db:delete_events(?DEVID, fromnow(-10), fromnow(0)),
+    [] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
+    ok.
 
 %%%%%%%%%%%%%%%%
 

@@ -10,6 +10,9 @@
 
 -record(loc, {id, dtm, lat, lon, data = #{}}).
 -type loc() :: #loc{}.
+-type eventtype() :: [atom()].
+-record(event, {id = 0, device, dtm, lat, lon, type, data = #{}}).
+-type event() :: #event{}.
 
 -type devid() :: binary().
 -type datetime() :: calendar:datetime().
