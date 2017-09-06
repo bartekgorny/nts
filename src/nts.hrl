@@ -34,3 +34,7 @@
 
 -define(CRITICAL_MSG(Format, Args),
     lager:critical(Format, Args)).
+
+-define(METRICS_SPIRAL, [[db, ops],
+                         [db, failed_ops]]
+).

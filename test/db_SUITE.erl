@@ -16,8 +16,9 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-    [concurrency].
-%%    [config, locs_and_frames, frames_and_updates, current_state].
+%%    [errors].
+    [config, locs_and_frames, frames_and_updates, current_state, concurrency,
+     errors].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -106,15 +107,27 @@ current_state(_) ->
 concurrency(_) ->
     % to prove that many concurrent processes can write at the same time
     L1 = generate_location(-1),
-    F1 = #frame{hex = false, data = <<"aaa">>, received = fromnow(-1)},
+    F1 = #frame{hex = false, data = <<"abc">>, received = fromnow(-1)},
     F = fun() -> nts_db:save_loc(?DEVID, L1, F1) end,
     Count = 200,
     lists:map(fun(_) -> spawn(F) end, lists:seq(1, Count)),
     % a brief pause so that all processes can send their queries before we do
     timer:sleep(100),
-    Res = nts_db:query("SELECT count(*) FROM device_01 WHERE frame='aaa'"),
+    Res = nts_db:query("SELECT count(*) FROM device_01 WHERE frame='abc'"),
     {_, [{Br}]} = Res,
     ?assertEqual(Count, binary_to_integer(Br)),
+    ok.
+
+errors(_) ->
+    {error, _} = nts_db:history(<<"00">>, fromnow(-25), fromnow(-17)),
+    {error, _} = nts_db:frames(<<"00">>, fromnow(-25), fromnow(-17)),
+    L1 = generate_location(-1),
+    F1 = #frame{hex = false, data = <<"abc">>, received = fromnow(-1)},
+    {error, _} = nts_db:save_loc(<<"00">>, L1, F1),
+    {error, _} = nts_db:save_frame(<<"00">>, F1),
+    undefined = nts_db:current_state(<<"00">>),
+    {error, _} = nts_db:update_loc(?DEVID, -1, L1),
+    {error, _} = nts_db:last_loc(<<"00">>, fromnow(-1)),
     ok.
 
 %%%%%%%%%%%%%%%%

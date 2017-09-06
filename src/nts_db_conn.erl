@@ -2,7 +2,9 @@
 %%% @author bartek
 %%% @copyright (C) 2017, <COMPANY>
 %%% @doc
-%%%
+%%% an abstraction layer over dbase connection
+%%% current implementation is very rudimentary - it uses only one connection which
+%%% internally (in epgsql) queues all requests, so there is no concurrency
 %%% @end
 %%% Created : 02. Sep 2017 12:41
 %%%-------------------------------------------------------------------

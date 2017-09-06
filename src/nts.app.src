@@ -4,7 +4,8 @@
   {registered, []},
   {mod, { nts_app, []}},
   {applications,
-   [jiffy,
+   [exometer,
+    jiffy,
     kernel,
     lager,
     stdlib

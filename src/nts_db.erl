@@ -9,6 +9,7 @@
 -module(nts_db).
 -author("bartekgorny").
 -include("nts.hrl").
+-include_lib("epgsql/include/epgsql.hrl").
 
 %% API
 -export([query/1, history/1, history/3, save_loc/3]).
@@ -19,18 +20,25 @@
 query(Q) ->
     log_query(Q),
     Conn = nts_db_conn:get_connection(),
+    nts_metrics:up({[db, ops]}),
     Ret = case epgsql:squery(Conn, Q) of
               {ok, Types, Values} -> {Types, Values};
-              {ok, _} -> ok
+              {ok, 0} ->
+                  nts_metrics:up([db, failed_ops]),
+                  {error, op_failed};
+              {ok, _} -> ok;
+              {error, #error{codename = EName}} ->
+                  nts_metrics:up([db, failed_ops]),
+                  {error, EName}
           end,
     nts_db_conn:free_connection(Conn),
     Ret.
 
--spec history(devid()) -> [loc()].
+-spec history(devid()) -> [loc()] | {error, atom()}.
 history(DevId) ->
     history(DevId, {{2000, 1, 1}, {0, 0, 0}}, {{2100, 1, 1}, {0, 0, 0}}).
 
--spec history(devid(), datetime(), datetime()) -> [loc()].
+-spec history(devid(), datetime(), datetime()) -> [loc()] | {error, atom()}.
 history(DevId, Start, Stop) ->
     Q = "SELECT id, dtm, coords, data FROM device_" ++
         binary_to_list(DevId) ++
@@ -39,8 +47,11 @@ history(DevId, Start, Stop) ->
         "' AND dtm < '" ++
         time2string(Stop) ++
         "' ORDER BY dtm",
-    {_, Vals} = query(Q),
-    lists:map(fun parse_loc/1, Vals).
+    case query(Q) of
+        {error, E} -> {error, E};
+        {_, Vals} ->
+            lists:map(fun parse_loc/1, Vals)
+    end.
 
 -spec frames(devid(), datetime(), datetime()) -> [frame()].
 frames(DevId, Start, Stop) ->
@@ -51,12 +62,15 @@ frames(DevId, Start, Stop) ->
         "' AND received < '" ++
         time2string(Stop) ++
         "' ORDER BY dtm",
-    {_, Vals} = query(Q),
-    lists:map(fun convert_frame/1, Vals).
+    case query(Q) of
+        {error, E} -> {error, E};
+        {_, Vals} ->
+            lists:map(fun convert_frame/1, Vals)
+    end.
 
 %% @doc if we receive new info we calculate new state of device and save it here, together
 %% with the incoming frame, whatever it may be
--spec save_loc(devid(), loc(), frame()) -> ok.
+-spec save_loc(devid(), loc(), frame()) -> ok | {error, atom()}.
 save_loc(DevId, Loc, Frame) ->
     Q = "INSERT INTO device_" ++
         binary_to_list(DevId) ++
@@ -73,12 +87,11 @@ save_loc(DevId, Loc, Frame) ->
         "," ++
         quote(time2string((Frame#frame.received))) ++
         ")",
-    query(Q),
-    ok.
+    query(Q).
 
 %% @doc for storing frames only if received from buffer (are older then current state)
 %% to be used later for reprocessing
--spec save_frame(devid(), frame()) -> ok.
+-spec save_frame(devid(), frame()) -> ok | {error, atom()}.
 save_frame(DevId, Frame) ->
     Q = "INSERT INTO device_" ++
     binary_to_list(DevId) ++
@@ -89,19 +102,17 @@ save_frame(DevId, Frame) ->
     "," ++
     quote(time2string((Frame#frame.received))) ++
     ")",
-    query(Q),
-    ok.
+    query(Q).
 
 %% @doc if we reprocess data we use frames to recalculate state and then frame id to update
--spec update_loc(devid(), integer(), loc()) -> ok.
+-spec update_loc(devid(), integer(), loc()) -> ok | {error, atom()}.
 update_loc(DevId, Id, Loc) ->
     Q = "UPDATE device_" ++ binary_to_list(DevId) ++
         " SET dtm=" ++ quote(time2string((Loc#loc.dtm))) ++
         ", coords=" ++ io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
         ", data=" ++ quote(to_json(Loc#loc.data)) ++
         " WHERE id=" ++ integer_to_list(Id),
-    query(Q),
-    ok.
+    query(Q).
 
 
 -spec update_state(devid(), loc()) -> ok.
@@ -117,10 +128,9 @@ update_state(DevId, Loc) ->
         quote(to_json(Loc#loc.data)) ++
         ") ON CONFLICT ( device ) DO UPDATE SET " ++
         " dtm=EXCLUDED.dtm, coords=EXCLUDED.coords, data=EXCLUDED.data",
-    query(Q),
-    ok.
+    query(Q).
 
--spec current_state(devid() | [devid()]) -> [loc()] | [{devid(), loc()}].
+-spec current_state(devid() | [devid()]) -> loc() | undefined | [{devid(), loc()}].
 current_state(DevId) when is_binary(DevId) ->
     Q = "SELECT * FROM current WHERE device=" ++ quote(DevId),
     {_, Vals} = query(Q),
@@ -138,22 +148,22 @@ current_state(DevIds) when is_list(DevIds) ->
     {_, Res} = query(Q),
     lists:map(fun parse_state/1, Res).
 
--spec last_loc(devid(), datetime()) -> loc().
+-spec last_loc(devid(), datetime()) -> loc() | {error, atom()}.
 last_loc(DevId, Dtm) ->
     % in nearly all cases we have a loc at this point
     Qdirect = "SELECT id, dtm, coords, data FROM device_" ++ binary_to_list(DevId) ++
               " WHERE dtm=" ++ quote(time2string(Dtm)),
-    {_, Res} = query(Qdirect),
-    case Res of
-        [R] -> parse_loc(R);
-        [] ->
+    case query(Qdirect) of
+        {error, E} -> {error, E};
+        {_, [R]} -> parse_loc(R);
+        {_, []} ->
             Qindirect = "SELECT id, dtm, coords, data FROM device_" ++ binary_to_list(DevId) ++
                         " WHERE dtm<" ++ quote(time2string(Dtm)) ++
                         " ORDER BY dtm DESC LIMIT 1",
-            {_, Res1} = query(Qindirect),
-            case Res1 of
-                [R1] -> parse_loc(R1);
-                [] -> #loc{}
+            case query(Qindirect) of
+                {error, E} -> {error, E};
+                {_, [R1]} -> parse_loc(R1);
+                {_, []} -> #loc{}
             end
     end.
 
