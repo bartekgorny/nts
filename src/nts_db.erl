@@ -20,7 +20,7 @@
 query(Q) ->
     log_query(Q),
     Conn = nts_db_conn:get_connection(),
-    nts_metrics:up({[db, ops]}),
+    nts_metrics:up([db, ops]),
     Ret = case epgsql:squery(Conn, Q) of
               {ok, Types, Values} -> {Types, Values};
               {ok, 0} ->

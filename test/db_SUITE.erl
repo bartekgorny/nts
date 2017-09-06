@@ -16,9 +16,9 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [errors].
+%%    [metrics].
     [config, locs_and_frames, frames_and_updates, current_state, concurrency,
-     errors].
+     errors, metrics].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -130,6 +130,17 @@ errors(_) ->
     {error, _} = nts_db:last_loc(<<"00">>, fromnow(-1)),
     ok.
 
+metrics(_) ->
+    Mets = [[db, ops], [db, failed_ops]],
+    Start = get_metric_values(Mets),
+    ct:pal("Start: ~p", [Start]),
+    nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
+    nts_db:history(<<"00">>, fromnow(-25), fromnow(-17)),
+    Stop = get_metric_values(Mets),
+    ct:pal("Stop: ~p", [Stop]),
+    ?assertEqual([2, 2, 1, 1], metric_dif(Start, Stop)).
+
+
 %%%%%%%%%%%%%%%%
 
 generate_location(Offset) ->
@@ -140,3 +151,9 @@ fromnow(Offset) ->
     N = os:timestamp(),
     Sec = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(N)) + Offset,
     calendar:gregorian_seconds_to_datetime(Sec).
+
+get_metric_values(MList) ->
+    lists:flatten(lists:map(fun(M) -> [nts_metrics:count(M), nts_metrics:one(M)] end, MList)).
+
+metric_dif(Start, Stop) ->
+    lists:map(fun({{ok, A}, {ok, B}}) -> B - A end, lists:zip(Start, Stop)).
