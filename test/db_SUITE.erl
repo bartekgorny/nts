@@ -17,17 +17,13 @@
 
 all() ->
 %%    [current_state].
-    [config, locs_and_frames, frames_and_updates, current_state, concurrency,
+    [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:clear_tables(["device_01", "current", "events"]),
     C.
-
-config(_) ->
-    ?ERROR_MSG("Raaaaaa: ~p", [1]),
-    ?assertEqual({ok, 123}, application:get_env(nts, a)).
 
 locs_and_frames(_) ->
     L1 = generate_location(-20),
@@ -133,11 +129,9 @@ errors(_) ->
 metrics(_) ->
     Mets = [[db, ops], [db, failed_ops]],
     Start = get_metric_values(Mets),
-    ct:pal("Start: ~p", [Start]),
     nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
     nts_db:history(<<"00">>, fromnow(-25), fromnow(-17)),
     Stop = get_metric_values(Mets),
-    ct:pal("Stop: ~p", [Stop]),
     ?assertEqual([2, 2, 1, 1], metric_dif(Start, Stop)).
 
 events(_) ->
