@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 09. Sep 2017 12:45
 %%%-------------------------------------------------------------------
--module(nts_parser_formula).
+-module(mod_parser_formula).
 -author("bartek").
 -include_lib("nts/src/nts.hrl").
 
