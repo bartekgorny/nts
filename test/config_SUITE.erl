@@ -18,7 +18,7 @@ all() ->
     [config, reload].
 
 init_per_suite(Config) ->
-    ConfigPath = make_filename(Config, "nts.cfg"),
+    ConfigPath = nts_helpers:make_filename(Config, "nts.cfg"),
     application:set_env(nts, config, ConfigPath),
     application:ensure_all_started(nts),
     Config.
@@ -37,23 +37,15 @@ config(_Config) ->
 reload(Config) ->
     ?assertEqual(123, nts_config:get_value(a)),
     ?assertEqual(undefined, nts_config:get_value(b)),
-    change_config(Config, "nts_alt.cfg"),
+    nts_helpers:change_config(Config, "nts_alt.cfg"),
     ?assertEqual(124, nts_config:get_value(a)),
     ?assertEqual("siedem", nts_config:get_value(b)),
-    change_config(Config, "nts_bad.cfg"),
+    nts_helpers:change_config(Config, "nts_bad.cfg"),
     ?assertEqual(124, nts_config:get_value(a)),
     ?assertEqual("siedem", nts_config:get_value(b)),
-    change_config(Config, "does_not_exist.cfg"),
+    nts_helpers:change_config(Config, "does_not_exist.cfg"),
     ?assertEqual(124, nts_config:get_value(a)),
     ?assertEqual("siedem", nts_config:get_value(b)),
     ok.
 
-change_config(Config, Nf) ->
-    ConfigPath = make_filename(Config, Nf),
-    application:set_env(nts, config, ConfigPath),
-    nts_config:reload().
-
-make_filename(Config, F) ->
-    DataDir = proplists:get_value(data_dir, Config),
-    filename:join([DataDir, F]).
 

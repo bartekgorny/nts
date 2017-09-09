@@ -12,6 +12,10 @@
 %% API
 -export([bin2hex/1, hex2bin/1]).
 -export([json_encode_map/1, json_decode_map/1]).
+-export([dtm/0]).
+
+dtm() ->
+    calendar:now_to_datetime(os:timestamp()).
 
 bin2hex(B) ->
     lists:flatten([ i2h(I) || <<I>> <= B]).

@@ -8,20 +8,27 @@
 %%%-------------------------------------------------------------------
 -author("bartekgorny").
 
--record(loc, {id, dtm, lat, lon, data = #{}}).
--type loc() :: #loc{}.
--type eventtype() :: [atom()].
--record(event, {id = 0, device, dtm, lat, lon, type, data = #{}}).
--type event() :: #event{}.
-
 -type devid() :: binary().
 -type datetime() :: calendar:datetime().
 
+-record(loc, {id, dtm, lat, lon, data = #{}}).
+-type loc() :: #loc{id :: integer(), dtm :: datetime(), lat :: float(), lon :: float(),
+                    data :: map()}.
+
+-type eventtype() :: [atom()].
+-record(event, {id = 0, device, dtm, lat, lon, type, data = #{}}).
+-type event() :: #event{id :: integer(), device :: devid(), dtm :: datetime(), lat :: float(),
+                        lon :: float(), type :: eventtype(), data :: map()}.
+
+
 %% 'hex' tells us if it is a string to be stored as-is, or a binary data which need to be hexlified
 %% for storage.
--record(frame, {id = 0, received, data = <<>>, hex = false}).
--type frame() :: #frame{}.
-
+-record(frame, {id = 0, device, received, type, data = <<>>, hex = false}).
+%% frame type may be undefined if we retrieve them from database for reprocessing
+%% frame parser returns it with frametype set
+-type frametype() :: location | event | hearbeat | undefined.
+-type frame() :: #frame{id :: integer(), device :: devid(), received :: datetime(),
+                        type :: frametype(), data :: binary(), hex :: boolean()}.
 
 -define(DEBUG(Format, Args),
     lager:debug(Format, Args)).

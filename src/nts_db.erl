@@ -54,7 +54,7 @@ history(DevId, Start, Stop) ->
             lists:map(fun parse_loc/1, Vals)
     end.
 
--spec frames(devid(), datetime(), datetime()) -> [frame()].
+-spec frames(devid(), datetime(), datetime()) -> [frame()] | {error, any()}.
 frames(DevId, Start, Stop) ->
     Q = "SELECT id, hex, frame, received FROM device_" ++
         binary_to_list(DevId) ++
@@ -66,7 +66,7 @@ frames(DevId, Start, Stop) ->
     case query(Q) of
         {error, E} -> {error, E};
         {_, Vals} ->
-            lists:map(fun convert_frame/1, Vals)
+            lists:map(fun(F) -> convert_frame(DevId, F) end, Vals)
     end.
 
 %% @doc if we receive new info we calculate new state of device and save it here, together
@@ -279,7 +279,7 @@ list_to_arith(L) ->
         _ -> list_to_float(L)
     end.
 
-convert_frame(R) ->
+convert_frame(DevId, R) ->
     {BId, BHex, Frame, BRec} = R,
     Id = binary_to_integer(BId),
     Hex = bin2bool(BHex),
@@ -288,7 +288,7 @@ convert_frame(R) ->
                true -> nts_utils:hex2bin(Frame);
                false -> Frame
            end,
-    #frame{id = Id, hex = Hex, data = Data, received = Rec}.
+    #frame{id = Id, device = DevId, hex = Hex, data = Data, received = Rec}.
 
 
 bin2bool(<<"t">>) -> true;

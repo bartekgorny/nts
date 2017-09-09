@@ -12,51 +12,20 @@
 -include_lib("nts/src/nts.hrl").
 
 %% API
--export([parse/2, strip/2]).
+-export([parse/2, parse/3]).
 
+-spec parse(atom() | list(), binary()) -> frame().
+parse(Dtype, Frame) ->
+    parse(Dtype, 0, Frame).
 
--spec parse(atom(), binary()) -> map().
-parse(formula, Frame) ->
-    Frame1 = strip($a, Frame),
-    <<Id:8/binary-unit:5, $,, Dt:8/binary-unit:14, $,, Fid:8/binary-unit:2, Reszta/binary>> = Frame1,
-    RList = binary:split(Reszta, <<",">>, [global]),
-    DMap = #{device => Id, dtm => parse_dt(Dt), frame_type => Fid},
-    process_fields(field_defs(Fid), tl(RList), DMap).
-
-process_fields([], _, Acc) -> Acc;
-process_fields([F|Tail], [Val|VTail], Acc) ->
-    {Key, NVal} = case F of
-               {K, Func} ->
-                   {K, erlang:Func(Val)};
-               {K, Mod, Func} ->
-                   {K, Mod:Func(Val)}
-           end,
-    Acc1 = maps:put(Key, NVal, Acc),
-    process_fields(Tail, VTail, Acc1).
-
-strip(Ch, <<Ch, Bin/binary>>) -> Bin;
-strip(_Ch, Bin) -> Bin.
-
--spec parse_dt(binary()) -> datetime().
-parse_dt(B) ->
-    <<BYr:8/binary-unit:4, BMth:8/binary-unit:2, BDay:8/binary-unit:2, BH:8/binary-unit:2,
-        BMin:8/binary-unit:2, BSec:8/binary-unit:2>> = B,
-    [Yr, Mth, Day, H, Min, Sec] = lists:map(fun binary_to_integer/1,
-                                            [BYr, BMth, BDay, BH, BMin, BSec]),
-    {{Yr, Mth, Day}, {H, Min, Sec}}.
-
-
-field_defs(<<"F1">>) ->
-    [{longitude, binary_to_float},
-     {lattitude, binary_to_float},
-     {speed, binary_to_integer},
-     {direction, binary_to_integer},
-     {altitude, binary_to_integer},
-     {sat, binary_to_integer},
-     {report_id, binary_to_integer},
-     {mileage, binary_to_integer},
-     {'IN1', binary_to_integer},
-     {voltage_1, binary_to_float},
-     {voltage_2, binary_to_float},
-     {'OUT1', binary_to_integer}].
+-spec parse(atom() | list(), integer(), binary()) -> frame().
+parse(Dtype, Id, Frame) when is_atom(Dtype) ->
+    case nts_config:get_value([device_types, Dtype]) of
+        undefined -> {error, config_not_found};
+        Settings -> parse(Settings, Id, Frame)
+    end;
+parse(Settings, Id, Frame) when is_list(Settings) ->
+    Pmod = proplists:get_value(parser_mod, Settings),
+    F = Pmod:parse_frame(Frame),
+    F#frame{id = Id, received = nts_utils:dtm()}.
 

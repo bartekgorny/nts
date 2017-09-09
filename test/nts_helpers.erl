@@ -10,9 +10,18 @@
 -author("bartekgorny").
 
 %% API
--export([clear_tables/1]).
+-export([clear_tables/1, change_config/2, make_filename/2]).
 
 clear_tables([]) -> ok;
 clear_tables([T|Rest]) ->
     nts_db:query("DELETE FROM " ++ T),
     clear_tables(Rest).
+
+change_config(Config, Nf) ->
+    ConfigPath = make_filename(Config, Nf),
+    application:set_env(nts, config, ConfigPath),
+    nts_config:reload().
+
+make_filename(Config, F) ->
+    DataDir = proplists:get_value(data_dir, Config),
+    filename:join([DataDir, F]).
