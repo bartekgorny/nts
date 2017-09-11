@@ -15,9 +15,13 @@
 -export([dtm/0, distance/2]).
 
 -export([get_brackets/3, ew_table/0]).
+-export([timediff/2]).
 
 dtm() ->
     calendar:now_to_datetime(os:timestamp()).
+
+timediff(A, B) ->
+    abs(calendar:gregorian_seconds_to_datetime(A) - calendar:datetime_to_gregorian_seconds(B)).
 
 bin2hex(B) ->
     lists:flatten([ i2h(I) || <<I>> <= B]).
