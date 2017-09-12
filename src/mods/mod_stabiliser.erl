@@ -14,16 +14,16 @@
 -export([filter_loc/3]).
 
 -define(IGNORE_TRESHOLD, 600).
+-define(MIN_SAT, 4).
 -define(SANE_SPEED, 300). % km/h, we don't support jet planes
 % if after a supposed jump we receives so many good locations we accept
 -define(STABLE_TRAIL_LEN, 5).
 
--record(state, {state, last_good, trail = [], ignore_th = ?IGNORE_TRESHOLD}).
+-record(state, {state = normal, last_good, trail = []}).
 -type locdata() :: {datetime(), float(), float()}.
 -type state() :: #state{state :: normal | checking,
                         last_good :: locdata(),
-                        trail :: [locdata()],
-                        ignore_th :: integer()}.
+                        trail :: [locdata()]}.
 
 -spec filter_loc(New :: locdata(), Sat :: integer(), State :: state()) ->
     {locdata() | undefined, state()}.
@@ -33,7 +33,7 @@ filter_loc(NewLoc, Sat, undefined) ->
 filter_loc(_, Sat, #state{last_good = undefined} = State) when Sat < 4 ->
     % corner case - we know nothing and loc is not valid
     {undefined, State};
-filter_loc(_, Sat, State) when Sat < 4 ->
+filter_loc(_, Sat, State) when Sat < ?MIN_SAT ->
     % not enough sat - ignoring
     {State#state.last_good, State};
 filter_loc(NewLoc, _, #state{last_good = undefined} = State) ->
@@ -100,7 +100,7 @@ verify_speed(NewLoc, OldLoc) ->
         _ -> true
     end.
 
-calc_speed({Dtm, Lat, Lon}, {{PDtm, PLat, PLon}}) ->
+calc_speed({Dtm, Lat, Lon}, {PDtm, PLat, PLon}) ->
     Dist = nts_utils:distance({Lat, Lon}, {PLat, PLon}),
     Seconds = nts_utils:timediff(Dtm, PDtm),
     3600 * Dist / Seconds.

@@ -21,7 +21,8 @@ dtm() ->
     calendar:now_to_datetime(os:timestamp()).
 
 timediff(A, B) ->
-    abs(calendar:gregorian_seconds_to_datetime(A) - calendar:datetime_to_gregorian_seconds(B)).
+    abs(calendar:datetime_to_gregorian_seconds(A) -
+        calendar:datetime_to_gregorian_seconds(B)).
 
 bin2hex(B) ->
     lists:flatten([ i2h(I) || <<I>> <= B]).
