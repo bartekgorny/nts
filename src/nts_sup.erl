@@ -32,7 +32,9 @@ init([]) ->
                     start => {nts_db_conn, start_link, []}},
     Config = #{id => config_manager,
                start => {nts_config, start_link,[]}},
-    Children = [Config, DbConnector],
+    Hooks = #{id => hook_manager,
+              start => {nts_hooks, start_link,[]}},
+    Children = [Config, DbConnector, Hooks],
     {ok, { {one_for_one, 2, 20}, Children} }.
 
 %%====================================================================
