@@ -33,6 +33,14 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+%% @doc
+%% hooks should NOT mutate the input data - only device state! you never
+%% know what another hook might need and how it would interpret your
+%% changes.
+-spec run(DeviceType :: atom(),
+          InputType :: atom | [atom()],
+          InputData :: frame(),
+          DeviceState :: nts_state:state()) -> nts_state:state().
 run(DeviceType, InputType, InputData, DeviceState) ->
     Res = case ets:lookup(hooks, DeviceType) of
               [] -> ets:lookup(hooks, global);
@@ -106,5 +114,6 @@ run_handlers([H|Handlers], InputType, InputData, DeviceState) ->
             ?ERROR_MSG("Error - handler ~p:~p returned ~p", [Mod, Fun, E]),
             {error, E}
     catch Etype:Eval ->
-        ?ERROR_MSG("Error - handler ~p:~p threw ~p:~p", [Mod, Fun, Etype, Eval])
+        ?ERROR_MSG("Error - handler ~p:~p threw ~p:~p", [Mod, Fun, Etype, Eval]),
+        {error, {Etype, Eval}}
     end.

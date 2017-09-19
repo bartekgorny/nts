@@ -10,12 +10,17 @@
 -author("bartekgorny").
 
 %% API
--export([clear_tables/1, change_config/2, make_filename/2]).
+-export([clear_tables/1, set_config/1, change_config/2, make_filename/2]).
 
 clear_tables([]) -> ok;
 clear_tables([T|Rest]) ->
     nts_db:query("DELETE FROM " ++ T),
     clear_tables(Rest).
+
+set_config(Config) ->
+    ConfigPath = nts_helpers:make_filename(Config, "nts.cfg"),
+    application:set_env(nts, config, ConfigPath),
+    Config.
 
 change_config(Config, Nf) ->
     ConfigPath = make_filename(Config, Nf),

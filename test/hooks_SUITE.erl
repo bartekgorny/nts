@@ -19,8 +19,7 @@ all() ->
     [one_call].
 
 init_per_suite(C) ->
-    ConfigPath = nts_helpers:make_filename(C, "nts.cfg"),
-    application:set_env(nts, config, ConfigPath),
+    nts_helpers:set_config(C),
     application:ensure_all_started(nts),
     C.
 

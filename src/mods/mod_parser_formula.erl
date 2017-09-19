@@ -55,7 +55,7 @@ parse_dt(B) ->
 -spec field_defs(binary()) -> [{atom(), atom()} | {atom(), atom(), atom()}].
 field_defs(<<"F1">>) ->
     [{longitude, binary_to_float},
-     {lattitude, binary_to_float},
+     {latitude, binary_to_float},
      {speed, binary_to_integer},
      {direction, binary_to_integer},
      {altitude, binary_to_integer},

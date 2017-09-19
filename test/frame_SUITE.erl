@@ -34,7 +34,7 @@ formula(_) ->
       direction := 12,
       dtm := {{2012,3,7},{13,26,29}},
       frame_type := <<"F1">>,
-      lattitude := 52.29,
+      latitude := 52.29,
       longitude := 21.29,
       mileage := 1094,
       report_id := 2,

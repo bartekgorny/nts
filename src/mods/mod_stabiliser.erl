@@ -22,10 +22,10 @@
 -record(state, {state = normal, last_good, trail = []}).
 -type locdata() :: {datetime(), float(), float()}.
 -type state() :: #state{state :: normal | checking,
-                        last_good :: locdata(),
+                        last_good :: locdata() | undefined,
                         trail :: [locdata()]}.
 
--spec filter_loc(New :: locdata(), Sat :: integer(), State :: state()) ->
+-spec filter_loc(New :: locdata(), Sat :: integer(), State :: state() | undefined) ->
     {locdata() | undefined, state()}.
 filter_loc(NewLoc, Sat, undefined) ->
     % init state
