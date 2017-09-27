@@ -11,9 +11,12 @@
 -type devid() :: binary().
 -type datetime() :: calendar:datetime().
 
--record(loc, {id, dtm, lat, lon, data = #{}}).
--type loc() :: #loc{id :: integer(), dtm :: datetime(), lat :: float(), lon :: float(),
-                    data :: map()}.
+-record(loc, {id = 0, dtm, lat = 0.0, lon = 0.0, data = #{}}).
+-type loc() :: #loc{id :: integer(), dtm :: datetime() | undefined, lat :: float(),
+                    lon :: float(), data :: map()}.
+
+%% data in location is a map which has three possible keys
+-type datapart() :: logistic | status | sensor.
 
 -type eventtype() :: [atom()].
 -record(event, {id = 0, device, dtm, lat, lon, type, data = #{}}).

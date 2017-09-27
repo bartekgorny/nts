@@ -12,12 +12,16 @@
 -include_lib("nts/src/nts.hrl").
 
 %% API
--export([handle_input/3]).
+-export([handle_input/5]).
 
-handle_input(location, Frame, State) ->
-    S1 = nts_state:setlocdata(last_signal, Frame#frame.received, State),
+handle_input(location, Frame, _OldLoc, NewLoc, StateData) ->
+    NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
     case maps:get(dtm, Frame#frame.data, undefined) of
-        undefined -> {ok, S1};
-        Dtm -> {ok, nts_state:setlocdata(last_signal_dtm, Dtm, S1)}
+        undefined -> {ok,
+                      NewLoc1,
+                      StateData};
+        Dtm -> {ok,
+                nts_location:set(status, last_signal_dtm, Dtm, NewLoc1),
+                StateData}
     end.
 

@@ -30,7 +30,8 @@ simple_test(_) ->
     RecDtm = fromnow(-10),
     Dtm = fromnow(-20),
     S = nts_device:getstate(Dev),
-    D = S#loc.data,
+    ct:pal("S: ~p", [S]),
+    D = maps:get(status, S#loc.data),
     ?assertMatch(#{last_signal := RecDtm, last_signal_dtm := Dtm }, D).
 
 fromnow(Offset) ->

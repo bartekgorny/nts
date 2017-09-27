@@ -24,6 +24,10 @@
 -behaviour(gen_fsm).
 -include_lib("nts/src/nts.hrl").
 
+-record(state, {devid, device_type, loc = #loc{}, internaldata = #{}}).
+-type state() :: #state{devid :: devid(), device_type :: atom(),
+                        loc :: loc() | undefined, internaldata :: map()}.
+
 %% API
 -export([start_link/1]).
 
@@ -69,19 +73,24 @@ getstate(Pid) ->
 
 init([DevId]) ->
     % look in dbase for device spec
-    {ok, normal, nts_state:init(DevId, formula)}.
+    {ok, normal, #state{devid = DevId, device_type = formula}}.
 
 normal(_Event, State) ->
     {next_state, normal, State}.
 
 normal(Event, _From, State) ->
-    {_, DevType} = nts_state:devdata(State),
-    case nts_hooks:run(DevType, Event#frame.type, Event, State) of
+    case nts_hooks:run(State#state.device_type,
+                       Event#frame.type,
+                       Event,
+                       State#state.loc,
+                       nts_location:new(),
+                       State#state.internaldata) of
         {error, _} ->
             % it has already been logged
             {reply, ok, normal, State};
-        NewState ->
+        {NewLocation, NewStateData} ->
             % save and publish
+            NewState = State#state{loc = NewLocation, internaldata = NewStateData},
             {reply, ok, normal, NewState}
     end.
 
@@ -89,7 +98,7 @@ handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 handle_sync_event(get_state, _From, StateName, State) ->
-    {reply, nts_state:getloc(State), StateName, State};
+    {reply, State#state.loc, StateName, State};
 handle_sync_event(_Event, _From, StateName, State) ->
     Reply = ok,
     {reply, Reply, StateName, State}.
@@ -109,8 +118,8 @@ terminate(_Reason, _StateName, _State) ->
     ok.
 
 -spec(code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
-    StateData :: nts_state:state(), Extra :: term()) ->
-    {ok, NextStateName :: atom(), NewStateData :: nts_state:state()}).
+    StateData :: state(), Extra :: term()) ->
+    {ok, NextStateName :: atom(), NewStateData :: state()}).
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 

@@ -24,38 +24,38 @@ init_per_suite(C) ->
     C.
 
 one_call(_) ->
-    Res = nts_hooks:run(dummydev, input_type, input_data, []),
+    {newloc, Res} = nts_hooks:run(dummydev, input_type, input_data, oldloc, newloc, []),
     ?assertEqual([1, 2, 3], lists:reverse(Res)),
-    Res2 = nts_hooks:run(formula, input_type, input_data, []),
+    {newloc, Res2} = nts_hooks:run(formula, input_type, input_data, oldloc, newloc, []),
     ?assertEqual([6, 1, 2, 4, 5], lists:reverse(Res2)),
-    Res3 = nts_hooks:run(another, input_type, input_data, []),
+    {newloc, Res3} = nts_hooks:run(another, input_type, input_data, oldloc, newloc, []),
     ?assertEqual([1, 2], lists:reverse(Res3)),
-    Res4 = nts_hooks:run(crashing, input_type, input_data, []),
+    Res4 = nts_hooks:run(crashing, input_type, input_data, oldloc, newloc, []),
     ?assertEqual({error, crashed}, Res4),
     ok.
 
-handle_input(_, _, List) ->
-    {ok, [1 | List]}.
+handle_input(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [1 | List]}.
 
-handler2(_, _, List) ->
-    {ok, [2 | List]}.
+handler2(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [2 | List]}.
 
-handler3(_, _, List) ->
-    {ok, [3 | List]}.
+handler3(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [3 | List]}.
 
-handler4(_, _, List) ->
-    {ok, [4 | List]}.
+handler4(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [4 | List]}.
 
-handler5(_, _, List) ->
-    {ok, [5 | List]}.
+handler5(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [5 | List]}.
 
-handler6(_, _, List) ->
-    {ok, [6 | List]}.
+handler6(_, _, _, NewLoc, List) ->
+    {ok, NewLoc, [6 | List]}.
 
-stoper(_, _, List) ->
-    {stop, List}.
+stoper(_, _, _, NewLoc, List) ->
+    {stop, NewLoc, List}.
 
-crashit(_, _, _) ->
+crashit(_, _, _, _, _) ->
     crashed.
 
 
