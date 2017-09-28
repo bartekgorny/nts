@@ -79,12 +79,12 @@ normal(_Event, State) ->
     {next_state, normal, State}.
 
 normal(Event, _From, State) ->
-    case nts_hooks:run(State#state.device_type,
-                       Event#frame.type,
-                       Event,
-                       State#state.loc,
-                       nts_location:new(),
-                       State#state.internaldata) of
+    case nts_hooks:run_procloc(State#state.device_type,
+                               Event#frame.type,
+                               Event,
+                               State#state.loc,
+                               nts_location:new(),
+                               State#state.internaldata) of
         {error, _} ->
             % it has already been logged
             {reply, ok, normal, State};
