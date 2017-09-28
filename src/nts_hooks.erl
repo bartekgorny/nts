@@ -34,7 +34,7 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 -spec run_procloc(DeviceType :: atom(),
-                  InputType :: atom | [atom()],
+                  InputType :: atom() | [atom()],
                   InputData :: frame(),
                   OldLoc :: loc(),
                   NewLoc :: loc(),
