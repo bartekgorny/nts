@@ -16,13 +16,13 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [current_state].
+%%    [device].
     [locs_and_frames, frames_and_updates, current_state, concurrency,
-     errors, metrics, events].
+     errors, metrics, events, device].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
-    nts_helpers:clear_tables(["device_01", "current", "events"]),
+    nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
     C.
 
 locs_and_frames(_) ->
@@ -44,7 +44,7 @@ locs_and_frames(_) ->
     ?assertEqual(18, LastIndirect#loc.lat),
     Null = nts_db:last_loc(?DEVID, fromnow(-22)),
     ?assertEqual(undefined, Null#loc.dtm),
-    ?assertEqual(undefined, Null#loc.lat),
+    ?assertEqual(0.0, Null#loc.lat),
     % history
     Hist = nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
     [H1, H2] = Hist,
@@ -149,6 +149,15 @@ events(_) ->
     ok = nts_db:delete_events(?DEVID, fromnow(-10), fromnow(0)),
     [] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
     ok.
+
+device(_) ->
+    ok = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
+    {error, _} = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
+    {<<"0123">>, formula, <<"razdwatrzy">>, #{}} = nts_db:read_device(<<"0123">>),
+    ok = nts_db:update_device(<<"0123">>, #{<<"cos">> => 99}),
+    {_, _, _, Conf} = nts_db:read_device(<<"0123">>),
+    ?assertEqual(99, maps:get(<<"cos">>, Conf)),
+    ok = nts_db:delete_device(<<"0123">>).
 
 %%%%%%%%%%%%%%%%
 

@@ -88,7 +88,7 @@ code_change(_OldVsn, State, _Extra) ->
 init_hook_table() ->
     ets:new(hooks, [named_table]),
     ets:delete_all_objects(hooks),
-    HookList = nts_config:get_value(hooks),
+    HookList = nts_config:get_value(hooks, []),
     lists:map(fun create_section/1, HookList),
     ok.
 

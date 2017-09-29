@@ -22,15 +22,17 @@ all() ->
 init_per_suite(C) ->
     nts_helpers:set_config(C),
     application:ensure_all_started(nts),
+    nts_helpers:clear_tables(["device"]),
     C.
 
 simple_test(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    ok = nts_db:update_device(?DEVID, #{<<"cos">> => 99}),
     {ok, Dev} = nts_device:start_link(?DEVID),
     nts_device:process_frame(Dev, mkframe(-10, -20)),
     RecDtm = fromnow(-10),
     Dtm = fromnow(-20),
     S = nts_device:getstate(Dev),
-    ct:pal("S: ~p", [S]),
     D = maps:get(status, S#loc.data),
     ?assertMatch(#{last_signal := RecDtm, last_signal_dtm := Dtm }, D).
 

@@ -72,8 +72,10 @@ getstate(Pid) ->
 %%%===================================================================
 
 init([DevId]) ->
-    % look in dbase for device spec
-    {ok, normal, #state{devid = DevId, device_type = formula}}.
+    {_, DType, Label, Config} = nts_db:read_device(DevId),
+    Internal = maps:put(<<"label">>, Label, Config),
+    {ok, normal, #state{devid = DevId, device_type = DType,
+                        internaldata = Internal}}.
 
 normal(_Event, State) ->
     {next_state, normal, State}.

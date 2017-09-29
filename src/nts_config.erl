@@ -22,7 +22,7 @@
     terminate/2,
     code_change/3]).
 
--export([get_value/1, reload/0]).
+-export([get_value/1, get_value/2, reload/0]).
 
 -include("nts.hrl").
 -define(SERVER, ?MODULE).
@@ -48,6 +48,12 @@ get_value(Name) ->
     case ets:lookup(runtime_config, Name) of
         [{Name, Val}] -> Val;
         [] -> undefined
+    end.
+
+get_value(Name, Default) ->
+    case get_value(Name) of
+        undefined -> Default;
+        Val -> Val
     end.
 
 reload() ->

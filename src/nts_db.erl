@@ -16,6 +16,7 @@
 -export([frames/3, save_frame/2, update_loc/3, update_state/2]).
 -export([current_state/1, last_loc/2]).
 -export([save_event/1, event_log/4, delete_events/3]).
+-export([create_device/3, read_device/1, update_device/2, delete_device/1]).
 
 
 query(Q) ->
@@ -172,7 +173,7 @@ last_loc(DevId, Dtm) ->
 save_event(#event{} = E) ->
     Q = "INSERT INTO events" ++
         "(device, dtm, coords, type, data) values (" ++
-        quote(binary_to_list(E#event.device)) ++
+        quote(E#event.device) ++
         "," ++
         quote(time2string((E#event.dtm))) ++
         "," ++
@@ -210,8 +211,43 @@ delete_events(DevId, Start, Stop) ->
         " AND device = " ++ quote(DevId),
     query(Q).
 
+-spec create_device(devid(), atom(), binary()) -> ok | {error, atom()}.
+create_device(DevId, Type, Label) ->
+    Q = "INSERT INTO device (devid, devtype, label, config) values (" ++
+        quote(DevId) ++
+        "," ++
+        quote(Type) ++
+        "," ++
+        quote(Label) ++
+        ", '{}')",
+    query(Q).
+
+-spec read_device(devid()) -> {devid(), binary(), binary(), map()} | undefined.
+read_device(DevId) ->
+    Q = "SELECT * FROM device WHERE devid=" ++ quote(DevId),
+    {_, Vals} = query(Q),
+    case Vals of
+        [] -> undefined;
+        [R] ->
+            parse_device(R)
+    end.
+
+-spec delete_device(devid()) -> ok | {error, atom()}.
+delete_device(DevId) ->
+    Q = "DELETE FROM device WHERE devid=" ++ quote(DevId),
+    query(Q).
+
+-spec update_device(devid(), map()) -> ok | {error, atom()}.
+update_device(DevId, Config) ->
+    Q = "UPDATE device SET" ++
+        " config=" ++ quote(to_json(Config)) ++
+        "WHERE devid=" ++ quote(DevId),
+    query(Q).
+
 %% helpers
 
+quote(S) when is_atom(S) ->
+    quote(atom_to_list(S));
 quote(S) when is_binary(S) ->
     quote(binary_to_list(S));
 quote(S) ->
@@ -224,6 +260,10 @@ prepare_frame(#frame{hex = true} = Frame) ->
 
 to_json(Data) ->
     binary_to_list(nts_utils:json_encode_map(Data)).
+
+parse_device({_, DevId, Type, Label, BConfig}) ->
+    {DevId, binary_to_existing_atom(Type, utf8),
+     Label, nts_utils:json_decode_map(BConfig)}.
 
 parse_loc({BId, D, Coords, BData}) ->
     Id = binary_to_integer(BId),
