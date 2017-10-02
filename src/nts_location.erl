@@ -12,7 +12,7 @@
 
 %% API
 -export([new/0]).
--export([id/1, dtm/1, dtm/2, coords/1, coords/3, get/3, set/4]).
+-export([id/1, dtm/1, dtm/2, coords/1, coords/3, get/3, set/4, remove/3]).
 
 -spec new() -> loc().
 new() -> #loc{}.
@@ -53,6 +53,16 @@ set(sensor, Key, Val, Loc) ->
 set(_, _, _, _) ->
     {error, invalid_section}.
 
+-spec remove(datapart(), atom(), loc()) -> loc().
+remove(logistic, Key, Loc) ->
+    remove_data(logistic, Key, Loc);
+remove(status, Key, Loc) ->
+    remove_data(status, Key, Loc);
+remove(sensor, Key, Loc) ->
+    remove_data(sensor, Key, Loc);
+remove(_, _, _) ->
+    {error, invalid_section}.
+
 get_data(Part, Key, Loc) ->
     Data = Loc#loc.data,
     case maps:get(Part, Data, undefined) of
@@ -65,3 +75,10 @@ set_data(Part, Key, Val, Loc) ->
     M = maps:get(Part, Data, #{}),
     Data1 = maps:put(Part, maps:put(Key, Val, M), Data),
     Loc#loc{data = Data1}.
+
+remove_data(Part, Key, Loc) ->
+    Data = Loc#loc.data,
+    M = maps:get(Part, Data, #{}),
+    Data1 = maps:put(Part, maps:remove(Key, M), Data),
+    Loc#loc{data = Data1}.
+

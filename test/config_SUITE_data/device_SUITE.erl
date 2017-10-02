@@ -34,7 +34,16 @@ simple_test(_) ->
     Dtm = fromnow(-20),
     S = nts_device:getstate(Dev),
     D = maps:get(status, S#loc.data),
-    ?assertMatch(#{last_signal := RecDtm, last_signal_dtm := Dtm }, D).
+    ?assertMatch(#{last_signal := RecDtm, last_signal_dtm := Dtm }, D),
+    ?assertMatch({10, 20}, nts_location:coords(S)),
+    has_error(false, Dev),
+    nts_device:process_frame(Dev, mkframe(-8, -16)),
+    check_coords({10, 20}, Dev), % not changed because of error
+    has_error(true, Dev),
+    nts_device:process_frame(Dev, mkframe(-7, -14)),
+    check_coords({7, 14}, Dev),
+    has_error(false, Dev),
+    ok.
 
 fromnow(Offset) ->
     N = os:timestamp(),
@@ -45,5 +54,32 @@ mkframe(RecOffset, Offset) ->
     #frame{type = location,
            received = fromnow(RecOffset),
            data = #{dtm => fromnow(Offset),
-                    latitude => 1,
-                    longitude => 2}}.
+                    latitude => -RecOffset,
+                    longitude => -Offset}}.
+
+check_coords(Exp, Dev) ->
+    S = nts_device:getstate(Dev),
+    ?assertMatch(Exp, nts_location:coords(S)).
+
+has_error(Bool, Dev) ->
+    S = nts_device:getstate(Dev),
+    E = nts_location:get(status, error, S),
+    case Bool of
+        true ->
+            ?assertNotEqual(undefined, E);
+        false ->
+            ?assertEqual(undefined, E)
+    end.
+
+handler_set_coords(location, Frame, _OldLoc, NewLoc, StateData) ->
+    Data = Frame#frame.data,
+    Lat = maps:get(latitude, Data),
+    Lon = maps:get(longitude, Data),
+    {ok, nts_location:coords(Lat, Lon, NewLoc), StateData}.
+
+handler_maybe_error(location, Frame, _OldLoc, NewLoc, StateData) ->
+    case nts_frame:get(latitude, Frame) of
+        8 -> throw(badmatch);
+        _ -> ok
+    end,
+    {ok, NewLoc, StateData}.

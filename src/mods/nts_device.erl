@@ -74,24 +74,34 @@ getstate(Pid) ->
 init([DevId]) ->
     {_, DType, Label, Config} = nts_db:read_device(DevId),
     Internal = maps:put(<<"label">>, Label, Config),
+    Internal1 = maps:put(<<"devid">>, DevId, Internal),
     {ok, normal, #state{devid = DevId, device_type = DType,
-                        internaldata = Internal}}.
+                        internaldata = Internal1}}.
 
 normal(_Event, State) ->
     {next_state, normal, State}.
 
-normal(Event, _From, State) ->
+normal(#frame{} = Event, _From, State) ->
+    % clear previous error
+    OldLocation = nts_location:remove(status, error, State#state.loc),
+    NewLoc = set_timestamps(Event, nts_location:new()),
     case nts_hooks:run_procloc(State#state.device_type,
                                Event#frame.type,
                                Event,
-                               State#state.loc,
-                               nts_location:new(),
+                               OldLocation,
+                               NewLoc,
                                State#state.internaldata) of
-        {error, _} ->
+        {error, E} ->
             % it has already been logged
-            {reply, ok, normal, State};
+            % mark location as errored so that this info is published
+            NewLocation = nts_location:set(status, error, E, OldLocation),
+            NewLocation1 = set_timestamps(Event, NewLocation),
+            % do not change internal state as it might be corrupt
+            NewState = State#state{loc = NewLocation1},
+            % save frame & location and publish
+            {reply, ok, normal, NewState};
         {NewLocation, NewStateData} ->
-            % save and publish
+            % save frame and location and publish
             NewState = State#state{loc = NewLocation, internaldata = NewStateData},
             {reply, ok, normal, NewState}
     end.
@@ -128,3 +138,12 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+set_timestamps(Frame, NewLoc) ->
+    NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
+    case maps:get(dtm, Frame#frame.data, undefined) of
+        undefined ->
+            NewLoc1;
+        Dtm ->
+            nts_location:set(status, last_signal_dtm, Dtm, NewLoc1)
+    end.

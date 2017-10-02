@@ -124,16 +124,17 @@ run_loc_handlers([], _, _, _, NewLoc, StateData) ->
     {NewLoc, StateData};
 run_loc_handlers([H|Handlers], InputType, InputData, OldLoc, NewLoc, StateData) ->
     {Mod, Fun} = H,
+    DevId = maps:get(<<"devid">>, StateData),
     try Mod:Fun(InputType, InputData, OldLoc, NewLoc, StateData) of
         {ok, NewLoc1, NewStateData} ->
             run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc1, NewStateData);
         {stop, NewLoc1, NewState} ->
             {NewLoc1, NewState};
         E ->
-            ?ERROR_MSG("Error - handler ~p:~p returned ~p", [Mod, Fun, E]),
+            ?ERROR_MSG("Error in ~p - handler ~p:~p returned ~p", [DevId, Mod, Fun, E]),
             {error, E}
     catch Etype:Eval ->
-        ?ERROR_MSG("Error - handler ~p:~p threw ~p:~p", [Mod, Fun, Etype, Eval]),
+        ?ERROR_MSG("Error in ~p - handler ~p:~p threw ~p:~p", [DevId, Mod, Fun, Etype, Eval]),
         {error, {Etype, Eval}}
     end.
 
