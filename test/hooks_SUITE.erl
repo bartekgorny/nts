@@ -24,47 +24,51 @@ init_per_suite(C) ->
     C.
 
 one_call(_) ->
-    {newloc, Res} = nts_hooks:run_procloc(dummydev, input_type, input_data, oldloc, newloc, []),
-    ?assertEqual([1, 2, 3], lists:reverse(Res)),
-    {newloc, Res2} = nts_hooks:run_procloc(formula, input_type, input_data, oldloc, newloc, []),
-    ?assertEqual([6, 1, 2, 4, 5], lists:reverse(Res2)),
-    {newloc, Res3} = nts_hooks:run_procloc(another, input_type, input_data, oldloc, newloc, []),
-    ?assertEqual([1, 2], lists:reverse(Res3)),
-    Res4 = nts_hooks:run_procloc(crashing, input_type, input_data, oldloc, newloc, []),
+    DevState = #{<<"devid">> => <<"aaa">>, res => []},
+    {newloc, Res} = nts_hooks:run_procloc(dummydev, input_type, input_data, oldloc, newloc, DevState),
+    ?assertEqual([1, 2, 3], lists:reverse(maps:get(res, Res))),
+    {newloc, Res2} = nts_hooks:run_procloc(formula, input_type, input_data, oldloc, newloc, DevState),
+    ?assertEqual([6, 1, 2, 4, 5], lists:reverse(maps:get(res, Res2))),
+    {newloc, Res3} = nts_hooks:run_procloc(another, input_type, input_data, oldloc, newloc, DevState),
+    ?assertEqual([1, 2], lists:reverse(maps:get(res, Res3))),
+    Res4 = nts_hooks:run_procloc(crashing, input_type, input_data, oldloc, newloc, DevState),
     ?assertEqual({error, crashed}, Res4),
     ok.
 
 other_hooks(_) ->
-    Res = nts_hooks:run(something, [], 123),
+    Res = nts_hooks:run(something, [], [123, 4]),
     ?assertEqual([246, 123], Res).
 
-handle_input(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [1 | List]}.
+handle_input(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(1, St)}.
 
-handler2(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [2 | List]}.
+handler2(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(2, St)}.
 
-handler3(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [3 | List]}.
+handler3(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(3, St)}.
 
-handler4(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [4 | List]}.
+handler4(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(4, St)}.
 
-handler5(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [5 | List]}.
+handler5(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(5, St)}.
 
-handler6(_, _, _, NewLoc, List) ->
-    {ok, NewLoc, [6 | List]}.
+handler6(_, _, _, NewLoc, St) ->
+    {ok, NewLoc, addtores(6, St)}.
 
-stoper(_, _, _, NewLoc, List) ->
-    {stop, NewLoc, List}.
+stoper(_, _, _, NewLoc, St) ->
+    {stop, NewLoc, St}.
 
 crashit(_, _, _, _, _) ->
     crashed.
 
-for_something(Acc, Int) ->
+for_something(Acc, Int, _) ->
     [Int * 2| Acc].
 
-for_something_else(Acc, Int) ->
+for_something_else(Acc, Int, _) ->
     [Int | Acc].
 
+addtores(I, R) ->
+    L = maps:get(res, R),
+    maps:put(res, [I | L], R).

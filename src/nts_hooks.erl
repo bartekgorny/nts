@@ -142,5 +142,5 @@ run_handlers([], Acc, _) ->
     Acc;
 run_handlers([H|Tail], Acc, Args) ->
     {Mod, Fun} = H,
-    Acc1 = apply(Mod, Fun, [Acc | [Args]]),
+    Acc1 = apply(Mod, Fun, [Acc | Args]),
     run_handlers(Tail, Acc1, Args).
