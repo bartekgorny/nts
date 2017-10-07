@@ -29,12 +29,13 @@ locs_and_frames(_) ->
     L1 = generate_location(-20),
     F1 = <<1, 99, 123>>,
     R1 = fromnow(-3),
-    nts_db:save_loc(?DEVID, L1, #frame{hex = true, data = F1, received = R1}),
+    nts_db:save_loc(?DEVID, L1, #frame{hex = true, data = F1, received = R1}, #{}),
     L2 = generate_location(-18),
     Dtm2 = L2#loc.dtm,
     F2 = <<"Frame01">>,
     R2 = fromnow(-2),
-    nts_db:save_loc(?DEVID, L2, #frame{hex = false, data = F2, received = R2}),
+    nts_db:save_loc(?DEVID, L2, #frame{hex = false, data = F2, received = R2},
+                    #{<<"statevar">> => 22}),
     % last location from history
     LastDirect = nts_db:last_loc(?DEVID, Dtm2),
     ?assertEqual(Dtm2, LastDirect#loc.dtm),
@@ -45,6 +46,10 @@ locs_and_frames(_) ->
     Null = nts_db:last_loc(?DEVID, fromnow(-22)),
     ?assertEqual(undefined, Null#loc.dtm),
     ?assertEqual(0.0, Null#loc.lat),
+    % last loc and state
+    {LastLoc, LastS} = nts_db:last_state(?DEVID),
+    ?assertEqual(Dtm2, LastLoc#loc.dtm),
+    ?assertEqual(22, maps:get(<<"statevar">>, LastS)),
     % history
     Hist = nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
     [H1, H2] = Hist,
@@ -71,7 +76,7 @@ frames_and_updates(_) ->
     nts_db:save_frame(?DEVID, F1),
     [F] = nts_db:frames(?DEVID, fromnow(-32), fromnow(-28)),
     L = generate_location(-31),
-    nts_db:update_loc(?DEVID, F#frame.id, L),
+    nts_db:update_loc(?DEVID, F#frame.id, L, #{}),
     [L1] = nts_db:history(?DEVID, fromnow(-33), fromnow(-30)),
     ?assertEqual(-31, maps:get(<<"offset">>, L1#loc.data)),
     ok.
@@ -104,7 +109,7 @@ concurrency(_) ->
     % to prove that many concurrent processes can write at the same time
     L1 = generate_location(-1),
     F1 = #frame{hex = false, data = <<"abc">>, received = fromnow(-1)},
-    F = fun() -> nts_db:save_loc(?DEVID, L1, F1) end,
+    F = fun() -> nts_db:save_loc(?DEVID, L1, F1, #{}) end,
     Count = 200,
     lists:map(fun(_) -> spawn(F) end, lists:seq(1, Count)),
     % a brief pause so that all processes can send their queries before we do
@@ -119,10 +124,10 @@ errors(_) ->
     {error, _} = nts_db:frames(<<"00">>, fromnow(-25), fromnow(-17)),
     L1 = generate_location(-1),
     F1 = #frame{hex = false, data = <<"abc">>, received = fromnow(-1)},
-    {error, _} = nts_db:save_loc(<<"00">>, L1, F1),
+    {error, _} = nts_db:save_loc(<<"00">>, L1, F1, #{}),
     {error, _} = nts_db:save_frame(<<"00">>, F1),
     undefined = nts_db:current_state(<<"00">>),
-    {error, _} = nts_db:update_loc(?DEVID, -1, L1),
+    {error, _} = nts_db:update_loc(?DEVID, -1, L1, #{}),
     {error, _} = nts_db:last_loc(<<"00">>, fromnow(-1)),
     ok.
 

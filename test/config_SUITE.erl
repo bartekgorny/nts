@@ -18,6 +18,7 @@ all() ->
     [config, reload].
 
 init_per_suite(Config) ->
+    application:stop(nts),
     ConfigPath = nts_helpers:make_filename(Config, "nts.cfg"),
     application:set_env(nts, config, ConfigPath),
     application:ensure_all_started(nts),

@@ -17,9 +17,8 @@ all() ->
     [formula].
 
 init_per_suite(C) ->
-    ConfigPath = nts_helpers:make_filename(C, "nts.cfg"),
-    application:set_env(nts, config, ConfigPath),
     application:ensure_all_started(nts),
+    nts_helpers:change_config(C, "nts.cfg"),
     C.
 
 formula(_) ->
@@ -41,7 +40,7 @@ formula(_) ->
       sat := 8,
       speed := 0,
       voltage_1 := 12.4,
-      voltage_2 := 12.69} = Res1#frame.data,
+      voltage_2 := 12.69} = Res1#frame.values,
     dtm_more_or_less(Res1#frame.received),
     Frame2 = <<"10285,20120410084652,F1,18.837392,53.006626,0,334,91,11,2,33509,1,13.25,13.57,0,,,,,,,,,,0">>,
     Res2 = nts_frame:parse(formula, Frame2),
@@ -49,7 +48,7 @@ formula(_) ->
     % now with settings
     Stgs = nts_config:get_value([device_types, formula]),
     Res3 = nts_frame:parse(Stgs, Frame1),
-    ?assertEqual(191, maps:get(altitude, Res3#frame.data)),
+    ?assertEqual(191, maps:get(altitude, Res3#frame.values)),
     ok.
 
 

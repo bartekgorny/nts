@@ -20,8 +20,8 @@ all() ->
     [simple_test].
 
 init_per_suite(C) ->
-    nts_helpers:set_config(C),
     application:ensure_all_started(nts),
+    nts_helpers:change_config(C, "nts.cfg"),
     nts_helpers:clear_tables(["device"]),
     C.
 
