@@ -12,9 +12,9 @@
 -include_lib("epgsql/include/epgsql.hrl").
 
 %% API
--export([query/1, history/1, history/3, save_loc/3]).
--export([frames/3, save_frame/2, update_loc/3, update_state/2]).
--export([current_state/1, last_loc/2]).
+-export([query/1, history/1, history/3, save_loc/4]).
+-export([frames/3, save_frame/2, update_loc/4, update_state/2]).
+-export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
 -export([save_event/1, event_log/4, delete_events/3]).
 -export([create_device/3, read_device/1, update_device/2, delete_device/1]).
 
@@ -71,12 +71,12 @@ frames(DevId, Start, Stop) ->
     end.
 
 %% @doc if we receive new info we calculate new state of device and save it here, together
-%% with the incoming frame, whatever it may be
--spec save_loc(devid(), loc(), frame()) -> ok | {error, atom()}.
-save_loc(DevId, Loc, Frame) ->
+%% with the incoming frame, whatever it may be, and internal state data
+-spec save_loc(devid(), loc(), frame(), map()) -> ok | {error, atom()}.
+save_loc(DevId, Loc, Frame, Internal) ->
     Q = "INSERT INTO device_" ++
         binary_to_list(DevId) ++
-        "(dtm, coords, data, hex, frame, received) values (" ++
+        "(dtm, coords, data, hex, frame, received, internal) values (" ++
         quote(time2string((Loc#loc.dtm))) ++
         "," ++
         quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
@@ -88,6 +88,8 @@ save_loc(DevId, Loc, Frame) ->
         quote(prepare_frame(Frame)) ++
         "," ++
         quote(time2string((Frame#frame.received))) ++
+        "," ++
+        quote(to_json(Internal)) ++
         ")",
     query(Q).
 
@@ -107,12 +109,13 @@ save_frame(DevId, Frame) ->
     query(Q).
 
 %% @doc if we reprocess data we use frames to recalculate state and then frame id to update
--spec update_loc(devid(), integer(), loc()) -> ok | {error, atom()}.
-update_loc(DevId, Id, Loc) ->
+-spec update_loc(devid(), integer(), loc(), map()) -> ok | {error, atom()}.
+update_loc(DevId, Id, Loc, Internal) ->
     Q = "UPDATE device_" ++ binary_to_list(DevId) ++
         " SET dtm=" ++ quote(time2string((Loc#loc.dtm))) ++
         ", coords=" ++ io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
         ", data=" ++ quote(to_json(Loc#loc.data)) ++
+        ", internal=" ++ quote(to_json(Internal)) ++
         " WHERE id=" ++ integer_to_list(Id),
     query(Q).
 
@@ -150,24 +153,46 @@ current_state(DevIds) when is_list(DevIds) ->
     {_, Res} = query(Q),
     lists:map(fun parse_state/1, Res).
 
--spec last_loc(devid(), datetime()) -> loc() | {error, atom()}.
-last_loc(DevId, Dtm) ->
+get_last_loc(DevId, Dtm, Fields) ->
     % in nearly all cases we have a loc at this point
-    Qdirect = "SELECT id, dtm, coords, data FROM device_" ++ binary_to_list(DevId) ++
-              " WHERE dtm=" ++ quote(time2string(Dtm)),
+    Qdirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
+        " WHERE dtm=" ++ quote(time2string(Dtm)),
     case query(Qdirect) of
         {error, E} -> {error, E};
         {_, [R]} -> parse_loc(R);
         {_, []} ->
-            Qindirect = "SELECT id, dtm, coords, data FROM device_" ++ binary_to_list(DevId) ++
-                        " WHERE dtm<" ++ quote(time2string(Dtm)) ++
-                        " ORDER BY dtm DESC LIMIT 1",
+            Qindirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
+                " WHERE dtm<" ++ quote(time2string(Dtm)) ++
+                " ORDER BY dtm DESC LIMIT 1",
             case query(Qindirect) of
                 {error, E} -> {error, E};
                 {_, [R1]} -> parse_loc(R1);
                 {_, []} -> #loc{}
             end
     end.
+
+get_last_loc(DevId, Fields) ->
+    % get the most recent loc
+    Qdirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
+              " ORDER BY dtm DESC LIMIT 1",
+    case query(Qdirect) of
+        {error, E} -> {error, E};
+        {_, [R]} -> parse_loc(R);
+        {_, []} -> undefined
+    end.
+
+-spec last_loc(devid(), datetime()) -> loc() | {error, atom()}.
+last_loc(DevId, Dtm) ->
+    get_last_loc(DevId, Dtm, "id, dtm, coords, data").
+-spec last_loc(devid()) -> loc() | {error, atom()}.
+last_loc(DevId) ->
+    get_last_loc(DevId, "id, dtm, coords, data").
+-spec last_state(devid(), datetime()) -> {loc(), internal()} | {error, atom()}.
+last_state(DevId, Dtm) ->
+    get_last_loc(DevId, Dtm, "id, dtm, coords, data, internal").
+-spec last_state(devid()) -> {loc(), internal()} | {error, atom()}.
+last_state(DevId) ->
+    get_last_loc(DevId, "id, dtm, coords, data, internal").
 
 -spec save_event(event()) -> ok | {error, atom()}.
 save_event(#event{} = E) ->
@@ -270,7 +295,11 @@ parse_loc({BId, D, Coords, BData}) ->
     Dt = parse_binary_datetime(D),
     Data = nts_utils:json_decode_map(BData),
     {Lat, Lon} = parse_binary_coords(Coords),
-    #loc{id = Id, dtm = Dt, lat = Lat, lon = Lon, data = Data}.
+    #loc{id = Id, dtm = Dt, lat = Lat, lon = Lon, data = Data};
+parse_loc({BId, D, Coords, BData, BInternal}) ->
+    Loc = parse_loc({BId, D, Coords, BData}),
+    Int = nts_utils:json_decode_map(BInternal),
+    {Loc, Int}.
 
 parse_state({DevId, D, Coords, BData}) ->
     {DevId, parse_loc({<<"0">>, D, Coords, BData})}.

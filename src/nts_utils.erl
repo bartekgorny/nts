@@ -55,6 +55,8 @@ h2i(H) ->
 json_encode_map(Data) ->
     jiffy:encode(Data).
 
+json_decode_map(<<"">>) ->
+    #{};
 json_decode_map(Data) ->
     jiffy:decode(Data, [return_maps]).
 

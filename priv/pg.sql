@@ -74,7 +74,8 @@ CREATE TABLE device_01 (
     data text,
     hex boolean,
     frame text,
-    received timestamp without time zone
+    received timestamp without time zone,
+    internal text
 );
 
 

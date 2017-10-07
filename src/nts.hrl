@@ -33,6 +33,9 @@
 -type frame() :: #frame{id :: integer(), device :: devid(), received :: datetime(),
                         type :: frametype(), data :: binary(), hex :: boolean()}.
 
+%% internal state of device (e.g. trails for stabilisation, moving avgs etc)
+-type internal() :: map().
+
 -define(DEBUG(Format, Args),
     lager:debug(Format, Args)).
 
