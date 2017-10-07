@@ -24,7 +24,7 @@
     terminate/2,
     code_change/3]).
 
--export([run_procloc/6, run/3]).
+-export([run_procloc/6, run/3, reload/0]).
 
 -define(SERVER, ?MODULE).
 
@@ -58,6 +58,14 @@ run(Hook, Acc, Args) ->
               end,
     run_handlers(Handlers, Acc, Args).
 
+-spec reload() -> ok.
+reload() ->
+    case whereis(?SERVER) of
+        undefined -> ok;
+        _ -> gen_server:call(?SERVER, reload)
+    end,
+    ok.
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -66,6 +74,9 @@ init([]) ->
     init_hook_table(),
     {ok, #state{}}.
 
+handle_call(reload, _From, State) ->
+    init_hook_table(),
+    {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -86,7 +97,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 init_hook_table() ->
-    ets:new(hooks, [named_table]),
+    case ets:info(hooks) of
+        undefined ->
+            ets:new(hooks, [named_table]);
+        _ ->
+            ok
+    end,
     ets:delete_all_objects(hooks),
     HookList = nts_config:get_value(hooks, []),
     lists:map(fun create_section/1, HookList),
