@@ -26,12 +26,13 @@
 
 %% 'hex' tells us if it is a string to be stored as-is, or a binary data which need to be hexlified
 %% for storage.
--record(frame, {id = 0, device, received, type, data = <<>>, hex = false}).
+%% 'values' is where we keep parsed data
+-record(frame, {id = 0, device, received, type, data = <<>>, hex = false, values}).
 %% frame type may be undefined if we retrieve them from database for reprocessing
 %% frame parser returns it with frametype set
 -type frametype() :: location | event | hearbeat | undefined.
 -type frame() :: #frame{id :: integer(), device :: devid(), received :: datetime(),
-                        type :: frametype(), data :: binary(), hex :: boolean()}.
+                        type :: frametype(), data :: binary(), hex :: boolean(), values :: map()}.
 
 %% internal state of device (e.g. trails for stabilisation, moving avgs etc)
 -type internal() :: map().
