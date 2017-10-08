@@ -9,13 +9,17 @@
 -module(nts_utils).
 -author("bartekgorny").
 
+-include_lib("nts/src/nts.hrl").
 %% API
 -export([bin2hex/1, hex2bin/1]).
 -export([json_encode_map/1, json_decode_map/1]).
+-export([time2string/1]).
 -export([dtm/0, distance/2]).
 
 -export([get_brackets/3, ew_table/0]).
 -export([timediff/2]).
+
+-export([test/0]).
 
 dtm() ->
     calendar:now_to_datetime(os:timestamp()).
@@ -53,7 +57,7 @@ h2i(H) ->
     list_to_integer(H, 16).
 
 json_encode_map(Data) ->
-    jiffy:encode(Data).
+    jiffy:encode(cookmap(Data)).
 
 json_decode_map(<<"">>) ->
     #{};
@@ -97,3 +101,23 @@ ew_table() ->
      {60, 55.800},
      {75, 28.902},
      {90, 0.000}].
+
+-spec time2string(datetime()) -> string().
+time2string(T) ->
+    {{Y, M, D}, {H, Mi, S}} = T,
+    lists:flatten(io_lib:format("~p-~p-~p ~p:~p:~p", [Y, M, D, H, Mi, S])).
+
+cookmap({{_, _, _}, {_, _, _}} = D) ->
+    list_to_binary(io_lib:format("~p", [D]));
+cookmap(M) when is_map(M) ->
+    maps:map(fun(_, V) -> cookmap(V) end, M);
+cookmap(M) ->
+    M.
+    
+    
+test() ->
+    M = #{flat => dtm(), what => "a", nested => #{rien => 123, d => dtm()}},
+    io:format("M:~n~p~n~n", [M]),
+    CM = cookmap(M),
+    io:format("CM:~n~p~n~n", [CM]),
+    json_encode_map(CM).

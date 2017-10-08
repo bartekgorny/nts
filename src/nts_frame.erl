@@ -34,4 +34,4 @@ parse(Settings, Id, Frame, Dtm) ->
     F#frame{id = Id, received = Dtm}.
 
 get(Key, Frame) ->
-    maps:get(Key, Frame#frame.data, undefined).
+    maps:get(Key, Frame#frame.values, undefined).

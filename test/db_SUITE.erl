@@ -16,7 +16,7 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [device].
+%%    [locs_and_frames].
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device].
 
@@ -168,7 +168,8 @@ device(_) ->
 
 generate_location(Offset) ->
     D = fromnow(Offset),
-    #loc{dtm = D, lat = -Offset, lon = -Offset * 2, data = #{offset => Offset}}.
+    #loc{dtm = D, lat = -Offset, lon = -Offset * 2,
+         data = #{offset => Offset, last_signal_dtm => D}}.
 
 fromnow(Offset) ->
     N = os:timestamp(),

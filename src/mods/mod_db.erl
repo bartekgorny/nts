@@ -10,4 +10,8 @@
 -author("bartekgorny").
 
 %% API
--export([]).
+-export([handle_newstate/4]).
+
+handle_newstate(Acc, DevId, Loc, Frame) ->
+    ok = nts_db:save_loc(DevId, Loc, Frame),
+    Acc.

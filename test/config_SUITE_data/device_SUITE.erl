@@ -22,7 +22,7 @@ all() ->
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:change_config(C, "nts.cfg"),
-    nts_helpers:clear_tables(["device"]),
+    nts_helpers:clear_tables(["device", "device_01"]),
     C.
 
 simple_test(_) ->
@@ -52,10 +52,11 @@ fromnow(Offset) ->
 
 mkframe(RecOffset, Offset) ->
     #frame{type = location,
+           device = ?DEVID,
            received = fromnow(RecOffset),
-           data = #{dtm => fromnow(Offset),
-                    latitude => -RecOffset,
-                    longitude => -Offset}}.
+           values = #{dtm => fromnow(Offset),
+                      latitude => -RecOffset,
+                      longitude => -Offset}}.
 
 check_coords(Exp, Dev) ->
     S = nts_device:getstate(Dev),
@@ -71,15 +72,15 @@ has_error(Bool, Dev) ->
             ?assertEqual(undefined, E)
     end.
 
-handler_set_coords(location, Frame, _OldLoc, NewLoc, StateData) ->
-    Data = Frame#frame.data,
+handler_set_coords(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
+    Data = Frame#frame.values,
     Lat = maps:get(latitude, Data),
     Lon = maps:get(longitude, Data),
-    {ok, nts_location:coords(Lat, Lon, NewLoc), StateData}.
+    {ok, nts_location:coords(Lat, Lon, NewLoc), Internal}.
 
-handler_maybe_error(location, Frame, _OldLoc, NewLoc, StateData) ->
+handler_maybe_error(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
     case nts_frame:get(latitude, Frame) of
         8 -> throw(badmatch);
         _ -> ok
     end,
-    {ok, NewLoc, StateData}.
+    {ok, NewLoc, Internal}.

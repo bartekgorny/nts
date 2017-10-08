@@ -33,6 +33,12 @@ query(Q) ->
                   nts_metrics:up([db, failed_ops]),
                   {error, EName}
           end,
+    case Ret of
+        {error, E} ->
+            ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]);
+        _ ->
+            ok
+    end,
     nts_db_conn:free_connection(Conn),
     Ret.
 
@@ -45,9 +51,9 @@ history(DevId, Start, Stop) ->
     Q = "SELECT id, dtm, coords, data FROM device_" ++
         binary_to_list(DevId) ++
         " WHERE dtm > '" ++
-        time2string(Start) ++
+        nts_utils:time2string(Start) ++
         "' AND dtm < '" ++
-        time2string(Stop) ++
+        nts_utils:time2string(Stop) ++
         "' ORDER BY dtm",
     case query(Q) of
         {error, E} -> {error, E};
@@ -60,9 +66,9 @@ frames(DevId, Start, Stop) ->
     Q = "SELECT id, hex, frame, received FROM device_" ++
         binary_to_list(DevId) ++
         " WHERE received > '" ++
-        time2string(Start) ++
+        nts_utils:time2string(Start) ++
         "' AND received < '" ++
-        time2string(Stop) ++
+        nts_utils:time2string(Stop) ++
         "' ORDER BY dtm",
     case query(Q) of
         {error, E} -> {error, E};
@@ -77,7 +83,7 @@ save_loc(DevId, Loc, Frame, Internal) ->
     Q = "INSERT INTO device_" ++
         binary_to_list(DevId) ++
         "(dtm, coords, data, hex, frame, received, internal) values (" ++
-        quote(time2string((Loc#loc.dtm))) ++
+        quote(nts_utils:time2string((Loc#loc.dtm))) ++
         "," ++
         quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
         "," ++
@@ -87,7 +93,7 @@ save_loc(DevId, Loc, Frame, Internal) ->
         "," ++
         quote(prepare_frame(Frame)) ++
         "," ++
-        quote(time2string((Frame#frame.received))) ++
+        quote(nts_utils:time2string((Frame#frame.received))) ++
         "," ++
         quote(to_json(Internal)) ++
         ")",
@@ -104,7 +110,7 @@ save_frame(DevId, Frame) ->
     "," ++
     quote(prepare_frame(Frame)) ++
     "," ++
-    quote(time2string((Frame#frame.received))) ++
+    quote(nts_utils:time2string((Frame#frame.received))) ++
     ")",
     query(Q).
 
@@ -112,7 +118,7 @@ save_frame(DevId, Frame) ->
 -spec update_loc(devid(), integer(), loc(), map()) -> ok | {error, atom()}.
 update_loc(DevId, Id, Loc, Internal) ->
     Q = "UPDATE device_" ++ binary_to_list(DevId) ++
-        " SET dtm=" ++ quote(time2string((Loc#loc.dtm))) ++
+        " SET dtm=" ++ quote(nts_utils:time2string((Loc#loc.dtm))) ++
         ", coords=" ++ io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
         ", data=" ++ quote(to_json(Loc#loc.data)) ++
         ", internal=" ++ quote(to_json(Internal)) ++
@@ -126,7 +132,7 @@ update_state(DevId, Loc) ->
         "(device, dtm, coords, data) values (" ++
         quote(DevId) ++
         "," ++
-        quote(time2string((Loc#loc.dtm))) ++
+        quote(nts_utils:time2string((Loc#loc.dtm))) ++
         "," ++
         quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
         "," ++
@@ -156,14 +162,14 @@ current_state(DevIds) when is_list(DevIds) ->
 get_last_loc(DevId, Dtm, Fields) ->
     % in nearly all cases we have a loc at this point
     Qdirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
-        " WHERE dtm=" ++ quote(time2string(Dtm)),
+              " WHERE dtm=" ++ quote(nts_utils:time2string(Dtm)),
     case query(Qdirect) of
         {error, E} -> {error, E};
         {_, [R]} -> parse_loc(R);
         {_, []} ->
             Qindirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
-                " WHERE dtm<" ++ quote(time2string(Dtm)) ++
-                " ORDER BY dtm DESC LIMIT 1",
+                        " WHERE dtm<" ++ quote(nts_utils:time2string(Dtm)) ++
+                        " ORDER BY dtm DESC LIMIT 1",
             case query(Qindirect) of
                 {error, E} -> {error, E};
                 {_, [R1]} -> parse_loc(R1);
@@ -200,7 +206,7 @@ save_event(#event{} = E) ->
         "(device, dtm, coords, type, data) values (" ++
         quote(E#event.device) ++
         "," ++
-        quote(time2string((E#event.dtm))) ++
+        quote(nts_utils:time2string((E#event.dtm))) ++
         "," ++
         quote(encode_coords(E#event.lat, E#event.lon)) ++
         "," ++
@@ -214,9 +220,9 @@ save_event(#event{} = E) ->
 event_log(DevId, EType, Start, Stop) ->
     Q = "SELECT id, device, dtm, coords, type, data FROM events" ++
         " WHERE dtm > " ++
-        quote(time2string(Start)) ++
+        quote(nts_utils:time2string(Start)) ++
         " AND dtm < " ++
-        quote(time2string(Stop)) ++
+        quote(nts_utils:time2string(Stop)) ++
         " AND device = " ++ quote(DevId) ++
         " AND type LIKE '" ++ encode_event_type(EType) ++ "%'" ++
         " ORDER BY dtm",
@@ -230,9 +236,9 @@ event_log(DevId, EType, Start, Stop) ->
 delete_events(DevId, Start, Stop) ->
     Q = "DELETE FROM events" ++
         " WHERE dtm > " ++
-        quote(time2string(Start)) ++
+        quote(nts_utils:time2string(Start)) ++
         " AND dtm < " ++
-        quote(time2string(Stop)) ++
+        quote(nts_utils:time2string(Stop)) ++
         " AND device = " ++ quote(DevId),
     query(Q).
 
@@ -336,11 +342,6 @@ parse_binary_datetime(R) ->
 -spec extract_int(string(), integer(), integer()) -> integer().
 extract_int(L, Start, Len) ->
     list_to_integer(lists:sublist(L, Start, Len)).
-
--spec time2string(datetime()) -> string().
-time2string(T) ->
-    {{Y, M, D}, {H, Mi, S}} = T,
-    lists:flatten(io_lib:format("~p-~p-~p ~p:~p:~p", [Y, M, D, H, Mi, S])).
 
 list_to_arith(L) ->
     case string:chr(L, $.) of

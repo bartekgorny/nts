@@ -24,7 +24,7 @@
     terminate/2,
     code_change/3]).
 
--export([run_procloc/6, run/3, reload/0]).
+-export([run_procloc/7, run/3, reload/0]).
 
 -define(SERVER, ?MODULE).
 
@@ -38,17 +38,19 @@ start_link() ->
                   InputData :: frame(),
                   OldLoc :: loc(),
                   NewLoc :: loc(),
-                  StateData :: map()) -> {loc(), map()} | {error, atom()}.
-run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, StateData) ->
+                  Internal :: map(),
+                  State :: term()) -> {loc(), map()} | {error, atom()}.
+run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, Internal, State) ->
     Section = case ets:lookup(hooks, procloc) of
                   [] -> [];
                   [{_, HSection}] -> HSection
               end,
     Handlers = case proplists:get_value(DeviceType, Section) of
-              undefined -> proplists:get_value(generic, Section);
-              Lst -> Lst
-          end,
-    run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc, StateData).
+                   undefined -> proplists:get_value(generic, Section);
+                   Lst -> Lst
+               end,
+    run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc, 
+                     Internal, State).
 
 -spec run(Section :: atom(), Acc :: any(), Args :: [any()]) -> any().
 run(Hook, Acc, Args) ->
@@ -136,21 +138,24 @@ gen_sublist(K, Map) ->
     Plist = maps:to_list(M1),
     [{M, F} || {_, {M, F}} <- lists:usort(Plist)].
 
-run_loc_handlers([], _, _, _, NewLoc, StateData) ->
-    {NewLoc, StateData};
-run_loc_handlers([H|Handlers], InputType, InputData, OldLoc, NewLoc, StateData) ->
+run_loc_handlers([], _, _, _, NewLoc, Internal, _State) ->
+    {NewLoc, Internal};
+run_loc_handlers([H|Handlers], InputType, InputData, OldLoc, NewLoc, Internal, State) ->
     {Mod, Fun} = H,
-    DevId = maps:get(<<"devid">>, StateData),
-    try Mod:Fun(InputType, InputData, OldLoc, NewLoc, StateData) of
-        {ok, NewLoc1, NewStateData} ->
-            run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc1, NewStateData);
-        {stop, NewLoc1, NewState} ->
-            {NewLoc1, NewState};
+    DevId = nts_device:devid(State),
+    try Mod:Fun(InputType, InputData, OldLoc, NewLoc, Internal, State) of
+        {ok, NewLoc1, NewInternal} ->
+            run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc1,
+                             NewInternal, State);
+        {stop, NewLoc1, NewInternal} ->
+            {NewLoc1, NewInternal};
         E ->
-            ?ERROR_MSG("Error in ~p - handler ~p:~p returned ~p", [DevId, Mod, Fun, E]),
+            ?ERROR_MSG("Error in ~p - handler ~p:~p returned ~p",
+                       [DevId, Mod, Fun, E]),
             {error, E}
     catch Etype:Eval ->
-        ?ERROR_MSG("Error in ~p - handler ~p:~p threw ~p:~p", [DevId, Mod, Fun, Etype, Eval]),
+        ?ERROR_MSG("Error in ~p - handler ~p:~p threw ~p:~p",
+                   [DevId, Mod, Fun, Etype, Eval]),
         {error, {Etype, Eval}}
     end.
 
