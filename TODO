@@ -1,0 +1,6 @@
+- przejść na gen_event do reload config
+- przejść na 20
+- zm. gen_fsm na gen_statem
+- pool postgres
+- get fresh loc on dev startup
+- save loc
