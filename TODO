@@ -1,4 +1,4 @@
-- przejść na gen_event do reload config
+v przejść na gen_event do reload config
 - przejść na 20
 - zm. gen_fsm na gen_statem
 - pool postgres

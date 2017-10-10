@@ -13,6 +13,8 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("nts/src/nts.hrl").
 
+-define(DEVID, <<"01">>).
+
 % copied from nts_device
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
     config = #{}}).
@@ -27,9 +29,12 @@ init_per_suite(C) ->
     nts_helpers:change_config(C, "nts.cfg"),
     C.
 
+end_per_suite(C) ->
+    application:stop(nts).
+
 one_call(_) ->
     Internal = #{res => []},
-    State = #state{},
+    State = #state{devid = ?DEVID},
     {newloc, Res} = nts_hooks:run_procloc(dummydev, input_type, input_data, oldloc,
                                           newloc, Internal, State),
     ?assertEqual([1, 2, 3], lists:reverse(maps:get(res, Res))),

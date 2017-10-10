@@ -62,10 +62,7 @@ run(Hook, Acc, Args) ->
 
 -spec reload() -> ok.
 reload() ->
-    case whereis(?SERVER) of
-        undefined -> ok;
-        _ -> gen_server:call(?SERVER, reload)
-    end,
+    gen_server:call(?SERVER, reload),
     ok.
 
 %%%===================================================================
@@ -74,6 +71,7 @@ reload() ->
 
 init([]) ->
     init_hook_table(),
+    gen_event:add_sup_handler(system_bus, nts_hooks_eh, []),
     {ok, #state{}}.
 
 handle_call(reload, _From, State) ->

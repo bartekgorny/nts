@@ -135,7 +135,8 @@ do_reload_config() ->
     ?INFO_MSG("Loading config from file: ~p", [Cf]),
     {ok, Data} = file:consult(Cf),
     lists:map(fun(H) -> ets:insert(runtime_config, H) end, Data),
-    nts_hooks:reload(), % XXX this is lame, should be published as event
+    % notify whoever is interested
+    gen_event:notify(system_bus, config_changed),
     ok.
 
 get_nested(undefined, _) -> undefined;
