@@ -9,9 +9,11 @@
 -module(mod_db).
 -author("bartekgorny").
 
-%% API
--export([handle_newstate/4]).
+-include_lib("nts/src/nts.hrl").
 
-handle_newstate(Acc, DevId, Loc, Frame) ->
-    ok = nts_db:save_loc(DevId, Loc, Frame),
+%% API
+-export([handle_newstate/5]).
+
+handle_newstate(Acc, DevId, Loc, Frame, Internal) ->
+    ok = nts_db:save_loc(DevId, Loc, Frame, Internal),
     Acc.

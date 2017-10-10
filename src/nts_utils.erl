@@ -12,7 +12,7 @@
 -include_lib("nts/src/nts.hrl").
 %% API
 -export([bin2hex/1, hex2bin/1]).
--export([json_encode_map/1, json_decode_map/1]).
+-export([json_encode_map/1, json_decode_map/1, format_error/1]).
 -export([time2string/1]).
 -export([dtm/0, distance/2]).
 
@@ -63,6 +63,9 @@ json_decode_map(<<"">>) ->
     #{};
 json_decode_map(Data) ->
     jiffy:decode(Data, [return_maps]).
+
+format_error({A, B}) ->
+    list_to_binary(io_lib:format("~p:~p", [A, B])).
 
 %% @doc
 %% if we wanted to be more precise we could implement Haversine formula

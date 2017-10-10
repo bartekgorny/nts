@@ -99,18 +99,24 @@ normal(#frame{} = Event, _From, State) ->
         {error, E} ->
             % it has already been logged
             % mark location as errored so that this info is published
-            NewLocation = nts_location:set(status, error, E, OldLocation),
+            Es = nts_utils:format_error(E),
+            NewLocation = nts_location:set(status, error, Es, OldLocation),
             % update timestamps, leave the rest unchanged
             NewLocation1 = set_timestamps(Event, NewLocation),
             % do not change internal state as it might be corrupt
             NewState = State#state{loc = NewLocation1},
             % save frame & location and publish
-%%            nts_hooks:run(save_state, [], [State#state.devid, NewLocation, Event]),
+            D = [State#state.devid, NewLocation1,
+                                           Event, State#state.internaldata],
+            ?ERROR_MSG("D:~n~p~n~n", [D]),
+            nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
+                                           Event, State#state.internaldata]),
 %%            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
             {reply, ok, normal, NewState};
         {NewLocation, NewInternal} ->
             % save frame and location and publish
-%%            nts_hooks:run(save_state, [], [State#state.devid, NewLocation, Event]),
+            nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
+                                           Event, NewInternal]),
 %%            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
             NewState = State#state{loc = NewLocation, internaldata = NewInternal},
             {reply, ok, normal, NewState}

@@ -39,9 +39,20 @@ simple_test(_) ->
     has_error(false, Dev),
     nts_device:process_frame(Dev, mkframe(-8, -16)),
     check_coords({10, 20}, Dev), % not changed because of error
+    % but timestamps changed
+    RecDtm2 = fromnow(-8),
+    Dtm2 = fromnow(-16),
+    S2 = nts_device:getstate(Dev),
+    D2 = maps:get(status, S2#loc.data),
+    ?assertMatch(#{last_signal := RecDtm2, last_signal_dtm := Dtm2 }, D2),
     has_error(true, Dev),
     nts_device:process_frame(Dev, mkframe(-7, -14)),
     check_coords({7, 14}, Dev),
+    RecDtm3 = fromnow(-7),
+    Dtm3 = fromnow(-14),
+    S3 = nts_device:getstate(Dev),
+    D3 = maps:get(status, S3#loc.data),
+    ?assertMatch(#{last_signal := RecDtm3, last_signal_dtm := Dtm3 }, D3),
     has_error(false, Dev),
     ok.
 
