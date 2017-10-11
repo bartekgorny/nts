@@ -12,7 +12,7 @@
 -include_lib("nts/src/nts.hrl").
 
 %% API
--export([parse/2, parse/4, get/2]).
+-export([parse/2, parse/4, get/2, empty/0]).
 
 %% @doc parse fresh frame, received from socket
 %% set id to 0 and datetime to now
@@ -35,3 +35,6 @@ parse(Settings, Id, Frame, Dtm) ->
 
 get(Key, Frame) ->
     maps:get(Key, Frame#frame.values, undefined).
+
+empty() ->
+    #frame{received = nts_utils:dtm()}.

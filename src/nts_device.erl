@@ -30,7 +30,7 @@
                         loc :: loc() | undefined, internaldata :: map()}.
 
 %% API
--export([start_link/1]).
+-export([start_link/1, stop/1]).
 
 %% gen_fsm callbacks
 -export([init/1,
@@ -42,7 +42,8 @@
          terminate/3,
          code_change/4]).
 
--export([process_frame/2, getstate/1, devid/1]).
+-export([process_frame/2, getstate/1, getstate/2, devid/1]).
+-export([reset/1]).
 
 -define(SERVER, ?MODULE).
 
@@ -62,11 +63,23 @@
 start_link(DevId) ->
     gen_fsm:start_link({local, ?SERVER}, ?MODULE, [DevId], []).
 
+stop(Pid) ->
+    gen_fsm:stop(Pid).
+
 process_frame(Pid, Frame) ->
     gen_fsm:sync_send_event(Pid, Frame).
 
 getstate(Pid) ->
     gen_fsm:sync_send_all_state_event(Pid, get_state).
+
+% for testing
+getstate(Pid, internal) ->
+    {_, S} = sys:get_state(Pid),
+    S#state.internaldata.
+
+% for troubleshooting
+reset(Pid) ->
+    gen_fsm:sync_send_all_state_event(Pid, reset_internal_state).
 
 % state accessors
 
@@ -79,8 +92,12 @@ devid(State) ->
 
 init([DevId]) ->
     {_, DType, Label, Config} = nts_db:read_device(DevId),
+    {Loc, Internal} =  case nts_db:last_state(DevId) of
+                           undefined -> {#loc{}, #{}};
+                           R -> R
+                       end,
     {ok, normal, #state{devid = DevId, device_type = DType, label = Label,
-                        config = Config, internaldata = #{}}}.
+                        config = Config, loc = Loc, internaldata = Internal}}.
 
 normal(_Event, State) ->
     {next_state, normal, State}.
@@ -106,9 +123,6 @@ normal(#frame{} = Event, _From, State) ->
             % do not change internal state as it might be corrupt
             NewState = State#state{loc = NewLocation1},
             % save frame & location and publish
-            D = [State#state.devid, NewLocation1,
-                                           Event, State#state.internaldata],
-            ?ERROR_MSG("D:~n~p~n~n", [D]),
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Event, State#state.internaldata]),
 %%            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
@@ -127,6 +141,12 @@ handle_event(_Event, StateName, State) ->
 
 handle_sync_event(get_state, _From, StateName, State) ->
     {reply, State#state.loc, StateName, State};
+handle_sync_event(reset_internal_state, _From, StateName, State) ->
+    NState = State#state{internaldata = #{}},
+    nts_hooks:run(save_state, [], [State#state.devid, State#state.loc,
+                  nts_frame:empty(), #{}]),
+    % here we will put some more telling 'frame'
+    {reply, ok, StateName, NState};
 handle_sync_event(_Event, _From, StateName, State) ->
     Reply = ok,
     {reply, Reply, StateName, State}.

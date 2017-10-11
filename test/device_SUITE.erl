@@ -17,11 +17,16 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-    [simple_test].
+%%    [simple_test, internal_state].
+%%    [simple_test].
+    [internal_state].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:change_config(C, "nts.cfg"),
+    C.
+
+init_per_testcase(_, C) ->
     nts_helpers:clear_tables(["device", "device_01"]),
     C.
 
@@ -54,6 +59,34 @@ simple_test(_) ->
     D3 = maps:get(status, S3#loc.data),
     ?assertMatch(#{last_signal := RecDtm3, last_signal_dtm := Dtm3 }, D3),
     has_error(false, Dev),
+    ok.
+
+internal_state(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    nts_device:process_frame(Dev, mkframe(-9, -18)),
+    nts_device:process_frame(Dev, mkframe(-7, -14)),
+    % hook handler accumulates data in internal state
+    I = nts_device:getstate(Dev, internal),
+    ?assertEqual([7, 9, 10], maps:get(trail, I)),
+    nts_device:stop(Dev),
+    timer:sleep(100),
+    {ok, Dev1} = nts_device:start_link(?DEVID),
+    Loc1 = nts_device:getstate(Dev1),
+    ?assertEqual({7, 14}, nts_location:coords(Loc1)),
+    I1 = nts_device:getstate(Dev1, internal),
+    ?assertEqual([7, 9, 10], maps:get(<<"trail">>, I1)),
+    % reset
+    nts_device:reset(Dev1),
+    I1a = nts_device:getstate(Dev1, internal),
+    ?assertEqual(#{}, I1a),
+    nts_device:stop(Dev1),
+    {ok, Dev2} = nts_device:start_link(?DEVID),
+    Loc2 = nts_device:getstate(Dev2),
+    ?assertEqual({7, 14}, nts_location:coords(Loc2)),
+    I2 = nts_device:getstate(Dev2, internal),
+    ?assertEqual(#{}, I2),
     ok.
 
 fromnow(Offset) ->
@@ -95,3 +128,9 @@ handler_maybe_error(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
         _ -> ok
     end,
     {ok, NewLoc, Internal}.
+
+handler_trail(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
+    Trail = maps:get(trail, Internal, []),
+    Lat = maps:get(latitude, Frame#frame.values),
+    Internal1 = maps:put(trail, [Lat | Trail], Internal),
+    {ok, NewLoc, Internal1}.

@@ -169,7 +169,7 @@ get_last_loc(DevId, Dtm, Fields) ->
         {_, []} ->
             Qindirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
                         " WHERE dtm<" ++ quote(nts_utils:time2string(Dtm)) ++
-                        " ORDER BY dtm DESC LIMIT 1",
+                        " ORDER BY dtm DESC, id DESC LIMIT 1",
             case query(Qindirect) of
                 {error, E} -> {error, E};
                 {_, [R1]} -> parse_loc(R1);
@@ -180,7 +180,7 @@ get_last_loc(DevId, Dtm, Fields) ->
 get_last_loc(DevId, Fields) ->
     % get the most recent loc
     Qdirect = "SELECT " ++ Fields ++ " FROM device_" ++ binary_to_list(DevId) ++
-              " ORDER BY dtm DESC LIMIT 1",
+              " ORDER BY dtm DESC, id DESC LIMIT 1",
     case query(Qdirect) of
         {error, E} -> {error, E};
         {_, [R]} -> parse_loc(R);
@@ -190,12 +190,15 @@ get_last_loc(DevId, Fields) ->
 -spec last_loc(devid(), datetime()) -> loc() | {error, atom()}.
 last_loc(DevId, Dtm) ->
     get_last_loc(DevId, Dtm, "id, dtm, coords, data").
+
 -spec last_loc(devid()) -> loc() | {error, atom()}.
 last_loc(DevId) ->
     get_last_loc(DevId, "id, dtm, coords, data").
+
 -spec last_state(devid(), datetime()) -> {loc(), internal()} | {error, atom()}.
 last_state(DevId, Dtm) ->
     get_last_loc(DevId, Dtm, "id, dtm, coords, data, internal").
+
 -spec last_state(devid()) -> {loc(), internal()} | {error, atom()}.
 last_state(DevId) ->
     get_last_loc(DevId, "id, dtm, coords, data, internal").
