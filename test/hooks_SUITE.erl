@@ -29,7 +29,7 @@ init_per_suite(C) ->
     nts_helpers:change_config(C, "nts.cfg"),
     C.
 
-end_per_suite(C) ->
+end_per_suite(_C) ->
     application:stop(nts).
 
 one_call(_) ->
@@ -78,10 +78,10 @@ crashit(_, _, _, _, _, _State) ->
     crashed.
 
 for_something(Acc, Int, _) ->
-    [Int * 2| Acc].
+    {ok, [Int * 2| Acc]}.
 
 for_something_else(Acc, Int, _) ->
-    [Int | Acc].
+    {ok, [Int | Acc]}.
 
 addtores(I, R) ->
     L = maps:get(res, R),

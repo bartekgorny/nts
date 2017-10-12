@@ -69,6 +69,7 @@ stop(Pid) ->
 process_frame(Pid, Frame) ->
     gen_fsm:sync_send_event(Pid, Frame).
 
+-spec getstate(pid()) -> loc().
 getstate(Pid) ->
     gen_fsm:sync_send_all_state_event(Pid, get_state).
 
@@ -83,6 +84,7 @@ reset(Pid) ->
 
 % state accessors
 
+-spec devid(state()) -> devid().
 devid(State) ->
     State#state.devid.
 
@@ -125,15 +127,18 @@ normal(#frame{} = Event, _From, State) ->
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Event, State#state.internaldata]),
-%%            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
+            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
             {reply, ok, normal, NewState};
         {NewLocation, NewInternal} ->
             % save frame and location and publish
-            nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
-                                           Event, NewInternal]),
-%%            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
-            NewState = State#state{loc = NewLocation, internaldata = NewInternal},
-            {reply, ok, normal, NewState}
+            case nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
+                                                Event, NewInternal]) of
+                {error, _} -> exit(self(), error_saving_data);
+                _ ->
+                    NewState = State#state{loc = NewLocation, internaldata = NewInternal},
+                    nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
+                    {reply, ok, normal, NewState}
+            end
     end.
 
 handle_event(_Event, StateName, State) ->

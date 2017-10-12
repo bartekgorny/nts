@@ -27,7 +27,7 @@
 %% 'hex' tells us if it is a string to be stored as-is, or a binary data which need to be hexlified
 %% for storage.
 %% 'values' is where we keep parsed data
--record(frame, {id = 0, device, received, type, data = <<>>, hex = false, values}).
+-record(frame, {id = 0, device, received, type, data = <<>>, hex = false, values = #{}}).
 %% frame type may be undefined if we retrieve them from database for reprocessing
 %% frame parser returns it with frametype set
 -type frametype() :: location | event | hearbeat | undefined.

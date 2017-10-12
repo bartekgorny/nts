@@ -199,7 +199,7 @@ last_loc(DevId) ->
 last_state(DevId, Dtm) ->
     get_last_loc(DevId, Dtm, "id, dtm, coords, data, internal").
 
--spec last_state(devid()) -> {loc(), internal()} | {error, atom()}.
+-spec last_state(devid()) -> {loc(), internal()} | {error, atom()} | undefined.
 last_state(DevId) ->
     get_last_loc(DevId, "id, dtm, coords, data, internal").
 

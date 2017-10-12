@@ -17,9 +17,9 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [simple_test, internal_state].
+    [simple_test, internal_state, failure].
 %%    [simple_test].
-    [internal_state].
+%%    [internal_state].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -89,6 +89,19 @@ internal_state(_) ->
     ?assertEqual(#{}, I2),
     ok.
 
+failure(_) ->
+    % make sure error while saving loc kill the device
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    nts_device:process_frame(Dev, mkframe(-9, -18)),
+    process_flag(trap_exit, true),
+    try nts_device:process_frame(Dev, mkframe(-1, -2))
+    catch _:_ -> ok end,
+    process_flag(trap_exit, false),
+    ?assertExit({noproc, _}, sys:get_state(Dev)),
+    ok.
+
 fromnow(Offset) ->
     N = os:timestamp(),
     Sec = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(N)) + Offset,
@@ -134,3 +147,10 @@ handler_trail(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
     Lat = maps:get(latitude, Frame#frame.values),
     Internal1 = maps:put(trail, [Lat | Trail], Internal),
     {ok, NewLoc, Internal1}.
+
+maybe_crash_while_saving(Acc, DevId, Loc, _Frame, _Internal) ->
+    case Loc#loc.lat of
+        1 -> Acc = DevId; % trigger badmatch
+        _  -> ok
+    end,
+    {ok, Acc}.

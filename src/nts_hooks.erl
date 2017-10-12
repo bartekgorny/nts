@@ -39,7 +39,7 @@ start_link() ->
                   OldLoc :: loc(),
                   NewLoc :: loc(),
                   Internal :: map(),
-                  State :: term()) -> {loc(), map()} | {error, atom()}.
+                  State :: term()) -> {loc(), map()} | {error, term()}.
 run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, Internal, State) ->
     Section = case ets:lookup(hooks, procloc) of
                   [] -> [];
@@ -161,5 +161,18 @@ run_handlers([], Acc, _) ->
     Acc;
 run_handlers([H|Tail], Acc, Args) ->
     {Mod, Fun} = H,
-    Acc1 = apply(Mod, Fun, [Acc | Args]),
-    run_handlers(Tail, Acc1, Args).
+    try apply(Mod, Fun, [Acc | Args]) of
+        {ok, Acc1} ->
+            run_handlers(Tail, Acc1, Args);
+        {stop, Acc1} ->
+            Acc1;
+        E ->
+            ?ERROR_MSG("Error - handler ~p:~p returned ~p",
+                       [Mod, Fun, E]),
+            {error, E}
+    catch Etype:Eval ->
+        ?ERROR_MSG("Error - handler ~p:~p threw ~p:~p",
+            [Mod, Fun, Etype, Eval]),
+        {error, {Etype, Eval}}
+    end.
+
