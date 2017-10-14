@@ -25,6 +25,9 @@ init_per_suite(C) ->
     nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
     C.
 
+end_per_suite(_Config) ->
+    application:stop(nts).
+
 locs_and_frames(_) ->
     L1 = generate_location(-20),
     F1 = <<1, 99, 123>>,

@@ -21,6 +21,9 @@ init_per_suite(C) ->
     nts_helpers:change_config(C, "nts.cfg"),
     C.
 
+end_per_suite(_Config) ->
+    application:stop(nts).
+
 formula(_) ->
     Frame1 = <<"a00129,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
     Res1 = nts_frame:parse(formula, Frame1),

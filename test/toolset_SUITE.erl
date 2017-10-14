@@ -22,6 +22,8 @@ all() ->
 init_per_suite(C) ->
     C.
 
+end_per_suite(_Config) -> ok.
+
 stabiliser(_) ->
     apply_and_check(
         [{1, 1}, {2, 2}, {3, 3}],

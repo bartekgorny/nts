@@ -132,6 +132,7 @@ reload_config() ->
 do_reload_config() ->
     ets:delete_all_objects(runtime_config),
     {ok, Cf} = application:get_env(nts, config),
+    ?ERROR_MSG("Cf: ~p~n", [Cf]),
     ?INFO_MSG("Loading config from file: ~p", [Cf]),
     {ok, Data} = file:consult(Cf),
     lists:map(fun(H) -> ets:insert(runtime_config, H) end, Data),

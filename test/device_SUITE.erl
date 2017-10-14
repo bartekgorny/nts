@@ -30,6 +30,9 @@ init_per_testcase(_, C) ->
     nts_helpers:clear_tables(["device", "device_01"]),
     C.
 
+end_per_suite(_Config) ->
+    application:stop(nts).
+
 simple_test(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     ok = nts_db:update_device(?DEVID, #{<<"cos">> => 99}),

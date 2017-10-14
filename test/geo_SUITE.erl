@@ -18,6 +18,10 @@
 all() ->
     [distance].
 
+init_per_suite(Config) -> Config.
+
+end_per_suite(_Config) -> ok.
+
 distance(_) ->
     % this is a regression in case we change the way of calculation
     % we don't need precision
