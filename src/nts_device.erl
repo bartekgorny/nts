@@ -2,7 +2,7 @@
 %%% @author bartekgorny
 %%% @copyright (C) 2017, <COMPANY>
 %%% @doc
-%%% Basic logic: this fsm receives new frames, usu. from a socket opened for
+%%% Basic logic: this statem receives new frames, usu. from a socket opened for
 %%% a device. Upon receiving a frame it:
 %%% * calls hooks to determine state changes
 %%% * saves frame with the new state
@@ -10,7 +10,7 @@
 %%%
 %%% If if receives a buffered frame (older than the most recent one) it
 %%% enters a 'suspended' state - incoming frames are buffered locally.
-%%% When buffered frames stop coming in the fsm it removes events from that
+%%% When buffered frames stop coming in the statem it removes events from that
 %%% period and reruns data processing (not publishing locations and events).
 %%% When it is done it processes buffered frames (with publishing) and
 %%% goes back to the normal state. (I think we need the third state, whereby
@@ -21,7 +21,7 @@
 -module(nts_device).
 -author("bartekgorny").
 
--behaviour(gen_fsm).
+-behaviour(gen_statem).
 -include_lib("nts/src/nts.hrl").
 
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
@@ -32,13 +32,11 @@
 %% API
 -export([start_link/1, stop/1]).
 
-%% gen_fsm callbacks
+%% gen_statem callbacks
 -export([init/1,
-         normal/2,
          normal/3,
-         handle_event/3,
-         handle_sync_event/4,
-         handle_info/3,
+         handle_event/4,
+         callback_mode/0,
          terminate/3,
          code_change/4]).
 
@@ -53,7 +51,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a gen_fsm process which calls Module:init/1 to
+%% Creates a gen_statem process which calls Module:init/1 to
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
 %%
@@ -61,17 +59,17 @@
 %%--------------------------------------------------------------------
 -spec(start_link(devid()) -> {ok, pid()} | ignore | {error, Reason :: term()}).
 start_link(DevId) ->
-    gen_fsm:start_link({local, ?SERVER}, ?MODULE, [DevId], []).
+    gen_statem:start_link({local, ?SERVER}, ?MODULE, [DevId], []).
 
 stop(Pid) ->
-    gen_fsm:stop(Pid).
+    gen_statem:stop(Pid).
 
 process_frame(Pid, Frame) ->
-    gen_fsm:sync_send_event(Pid, Frame).
+    gen_statem:call(Pid, Frame).
 
 -spec getstate(pid()) -> loc().
 getstate(Pid) ->
-    gen_fsm:sync_send_all_state_event(Pid, get_state).
+    gen_statem:call(Pid, get_state).
 
 % for testing
 getstate(Pid, internal) ->
@@ -80,7 +78,7 @@ getstate(Pid, internal) ->
 
 % for troubleshooting
 reset(Pid) ->
-    gen_fsm:sync_send_all_state_event(Pid, reset_internal_state).
+    gen_statem:call(Pid, reset_internal_state).
 
 % state accessors
 
@@ -89,7 +87,7 @@ devid(State) ->
     State#state.devid.
 
 %%%===================================================================
-%%% gen_fsm callbacks
+%%% gen_statem
 %%%===================================================================
 
 init([DevId]) ->
@@ -101,10 +99,9 @@ init([DevId]) ->
     {ok, normal, #state{devid = DevId, device_type = DType, label = Label,
                         config = Config, loc = Loc, internaldata = Internal}}.
 
-normal(_Event, State) ->
-    {next_state, normal, State}.
+callback_mode() -> state_functions.
 
-normal(#frame{} = Event, _From, State) ->
+normal({call, From}, #frame{} = Event, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Event, nts_location:new()),
@@ -128,7 +125,7 @@ normal(#frame{} = Event, _From, State) ->
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Event, State#state.internaldata]),
             nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
-            {reply, ok, normal, NewState};
+            {keep_state, NewState, [{reply, From, ok}]};
         {NewLocation, NewInternal} ->
             % save frame and location and publish
             case nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
@@ -137,42 +134,28 @@ normal(#frame{} = Event, _From, State) ->
                 _ ->
                     NewState = State#state{loc = NewLocation, internaldata = NewInternal},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
-                    {reply, ok, normal, NewState}
+                    {keep_state, NewState, [{reply, From, ok}]}
             end
-    end.
+    end;
+normal(T, Event, State) ->
+    handle_event(T, Event, normal, State).
 
-handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
-
-handle_sync_event(get_state, _From, StateName, State) ->
-    {reply, State#state.loc, StateName, State};
-handle_sync_event(reset_internal_state, _From, StateName, State) ->
+handle_event({call, From}, get_state, _StateName, State) ->
+    {keep_state_and_data, [{reply, From, State#state.loc}]};
+handle_event({call, From}, reset_internal_state, _StateName, State) ->
     NState = State#state{internaldata = #{}},
+    % here we will put some more telling 'frame'
     nts_hooks:run(save_state, [], [State#state.devid, State#state.loc,
                   nts_frame:empty(), #{}]),
-    % here we will put some more telling 'frame'
-    {reply, ok, StateName, NState};
-handle_sync_event(_Event, _From, StateName, State) ->
-    Reply = ok,
-    {reply, Reply, StateName, State}.
+    {keep_state, NState, [{reply, From, ok}]};
+handle_event({call, From}, _Event, _StateName, _State) ->
+    {keep_state_and_data, [{reply, From, ok}]};
+handle_event(_, _Event, _StateName, _State) ->
+    keep_state_and_data.
 
--spec(handle_info(Info :: term(), StateName :: atom(),
-    StateData :: term()) ->
-    {next_state, NextStateName :: atom(), NewStateData :: term()} |
-    {next_state, NextStateName :: atom(), NewStateData :: term(),
-        timeout() | hibernate} |
-    {stop, Reason :: normal | term(), NewStateData :: term()}).
-handle_info(_Info, StateName, State) ->
-    {next_state, StateName, State}.
-
--spec(terminate(Reason :: normal | shutdown | {shutdown, term()}
-| term(), StateName :: atom(), StateData :: term()) -> term()).
 terminate(_Reason, _StateName, _State) ->
     ok.
 
--spec(code_change(OldVsn :: term() | {down, term()}, StateName :: atom(),
-    StateData :: state(), Extra :: term()) ->
-    {ok, NextStateName :: atom(), NewStateData :: state()}).
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
