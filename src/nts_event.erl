@@ -14,6 +14,8 @@
 %% API
 -export([emit_event/4, emit_event/5]).
 
+-spec emit_event(eventtype(), devid(), loc() | undefined, datetime()) ->
+    ok.
 emit_event(EType, DevId, undefined, Dtm) ->
     emit_event(EType, DevId, #loc{}, Dtm);
 emit_event(EType, DevId, Loc, Dtm) ->
@@ -27,4 +29,5 @@ emit_event(EType, DevId, Loc, Dtm, Data) ->
                  lon = Loc#loc.lon,
                  data = Data},
     ok = nts_db:save_event(Evt), % crash here
-    nts_hooks:run(publish_event, [], [EType, Evt]).
+    nts_hooks:run(publish_event, [], [EType, Evt]),
+    ok.

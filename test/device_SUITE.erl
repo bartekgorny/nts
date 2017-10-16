@@ -18,12 +18,16 @@
 
 all() ->
     [simple_test, internal_state, failure, events].
+%%    [events].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:change_config(C, "nts.cfg"),
     C.
 
+init_per_testcase(events, C) ->
+    event_listener:start_link(),
+    init_per_testcase(generic, C);
 init_per_testcase(_, C) ->
     nts_helpers:clear_tables(["device", "device_01", "events"]),
     C.
@@ -125,6 +129,12 @@ events(_) ->
     [E0, E1] = Res,
     ?assertEqual(Now0, E0#event.dtm),
     ?assertEqual(Now1, E1#event.dtm),
+    FlushRes = event_listener:flush(),
+    [{P0Type, P0}, {P1Type, P1}] = FlushRes,
+    ?assertEqual(Now0, P0#event.dtm),
+    ?assertEqual(Now1, P1#event.dtm),
+    ?assertEqual([device, activity, up], P0Type),
+    ?assertEqual([device, activity, down], P1Type),
     ok.
 
 %%%===================================================================
