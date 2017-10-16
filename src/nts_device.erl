@@ -103,6 +103,8 @@ init([DevId]) ->
 
 callback_mode() -> [state_functions].
 
+normal(state_timeout, idle, _State) ->
+    {stop, idle_timeout};
 normal({call, From}, #frame{} = Frame, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
@@ -128,7 +130,7 @@ normal({call, From}, #frame{} = Frame, State) ->
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                 Frame, State#state.internaldata]),
             nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
-            {keep_state, NewState, [{reply, From, ok}]};
+            keep_state_with_timeout(NewState, From);
         {NewLocation, NewInternal} ->
             NewState0 = maybe_emit_device_up(NewLocation, State),
             % save frame and location and publish
@@ -138,7 +140,7 @@ normal({call, From}, #frame{} = Frame, State) ->
                 _ ->
                     NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
-                    {keep_state, NewState, [{reply, From, ok}]}
+                    keep_state_with_timeout(NewState, From)
             end
     end;
 normal(T, Event, State) ->
@@ -167,6 +169,11 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+keep_state_with_timeout(NewState, From) ->
+    TVal = get_config(idle_timeout, NewState),
+    {keep_state, NewState, [{reply, From, ok},
+                            {state_timeout, TVal * 1000, idle}]}.
 
 set_timestamps(Frame, NewLoc) ->
     NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
@@ -198,3 +205,8 @@ maybe_emit_device_down(State) ->
                          nts_utils:dtm()),
     State#state{up = true}.
 
+get_config(Name, State) ->
+    case maps:get(Name, State#state.config, undefined) of
+        undefined -> nts_config:get_value(Name);
+        V -> V
+    end.

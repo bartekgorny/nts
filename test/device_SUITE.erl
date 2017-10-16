@@ -17,8 +17,8 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-    [simple_test, internal_state, failure, events].
-%%    [events].
+%%    [simple_test, internal_state, failure, events].
+    [idle_timeout].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -135,6 +135,20 @@ events(_) ->
     ?assertEqual(Now1, P1#event.dtm),
     ?assertEqual([device, activity, up], P0Type),
     ?assertEqual([device, activity, down], P1Type),
+    ok.
+
+idle_timeout(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(0, -20)),
+    process_flag(trap_exit, true),
+    timer:sleep(3000),
+    process_flag(trap_exit, false),
+    ?assertExit({noproc, _}, sys:get_state(Dev)),
+    Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(0)),
+    [E0, E1] = Res,
+    ?assertEqual([device, activity, up], E0#event.type),
+    ?assertEqual([device, activity, down], E1#event.type),
     ok.
 
 %%%===================================================================
