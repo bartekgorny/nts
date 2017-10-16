@@ -103,13 +103,13 @@ init([DevId]) ->
 
 callback_mode() -> [state_functions].
 
-normal({call, From}, #frame{} = Event, State) ->
+normal({call, From}, #frame{} = Frame, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
-    NewLoc = set_timestamps(Event, nts_location:new()),
+    NewLoc = set_timestamps(Frame, nts_location:new()),
     case nts_hooks:run_procloc(State#state.device_type,
-                               Event#frame.type,
-                               Event,
+                               Frame#frame.type,
+        Frame,
                                OldLocation,
                                NewLoc,
                                State#state.internaldata,
@@ -120,20 +120,20 @@ normal({call, From}, #frame{} = Event, State) ->
             Es = nts_utils:format_error(E),
             NewLocation = nts_location:set(status, error, Es, OldLocation),
             % update timestamps, leave the rest unchanged
-            NewLocation1 = set_timestamps(Event, NewLocation),
+            NewLocation1 = set_timestamps(Frame, NewLocation),
             % do not change internal state as it might be corrupt
             NewState0 = State#state{loc = NewLocation1},
             NewState = maybe_emit_device_up(OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
-                                           Event, State#state.internaldata]),
+                Frame, State#state.internaldata]),
             nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
             {keep_state, NewState, [{reply, From, ok}]};
         {NewLocation, NewInternal} ->
             NewState0 = maybe_emit_device_up(NewLocation, State),
             % save frame and location and publish
             case nts_hooks:run(save_state, [], [NewState0#state.devid, NewLocation,
-                                                Event, NewInternal]) of
+                Frame, NewInternal]) of
                 {error, _} -> exit(self(), error_saving_data);
                 _ ->
                     NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal},
