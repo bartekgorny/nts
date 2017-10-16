@@ -25,9 +25,10 @@
 -include_lib("nts/src/nts.hrl").
 
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
-                config = #{}}).
--type state() :: #state{devid :: devid(), device_type :: atom(),
-                        loc :: loc() | undefined, internaldata :: map()}.
+                config = #{}, up = false}).
+-type state() :: #state{devid :: devid(), device_type :: atom(), label :: binary(),
+                        loc :: loc() | undefined, internaldata :: map(),
+                        config :: map(), up :: boolean()}.
 
 %% API
 -export([start_link/1, stop/1]).
@@ -91,6 +92,7 @@ devid(State) ->
 %%%===================================================================
 
 init([DevId]) ->
+    process_flag(trap_exit, true),
     {_, DType, Label, Config} = nts_db:read_device(DevId),
     {Loc, Internal} =  case nts_db:last_state(DevId) of
                            undefined -> {#loc{}, #{}};
@@ -99,7 +101,7 @@ init([DevId]) ->
     {ok, normal, #state{devid = DevId, device_type = DType, label = Label,
                         config = Config, loc = Loc, internaldata = Internal}}.
 
-callback_mode() -> state_functions.
+callback_mode() -> [state_functions].
 
 normal({call, From}, #frame{} = Event, State) ->
     % clear previous error
@@ -120,19 +122,21 @@ normal({call, From}, #frame{} = Event, State) ->
             % update timestamps, leave the rest unchanged
             NewLocation1 = set_timestamps(Event, NewLocation),
             % do not change internal state as it might be corrupt
-            NewState = State#state{loc = NewLocation1},
+            NewState0 = State#state{loc = NewLocation1},
+            NewState = maybe_emit_device_up(OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Event, State#state.internaldata]),
             nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
             {keep_state, NewState, [{reply, From, ok}]};
         {NewLocation, NewInternal} ->
+            NewState0 = maybe_emit_device_up(NewLocation, State),
             % save frame and location and publish
-            case nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
+            case nts_hooks:run(save_state, [], [NewState0#state.devid, NewLocation,
                                                 Event, NewInternal]) of
                 {error, _} -> exit(self(), error_saving_data);
                 _ ->
-                    NewState = State#state{loc = NewLocation, internaldata = NewInternal},
+                    NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
                     {keep_state, NewState, [{reply, From, ok}]}
             end
@@ -153,7 +157,8 @@ handle_event({call, From}, _Event, _StateName, _State) ->
 handle_event(_, _Event, _StateName, _State) ->
     keep_state_and_data.
 
-terminate(_Reason, _StateName, _State) ->
+terminate(_Reason, _StateName, State) ->
+    maybe_emit_device_down(State),
     ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
@@ -172,3 +177,24 @@ set_timestamps(Frame, NewLoc) ->
             NewLoc2 = nts_location:set(status, last_signal_dtm, Dtm, NewLoc1),
             NewLoc2#loc{dtm = Dtm}
     end.
+
+%% @doc we do it once, after receiving frame, using either new location (before saving in case
+%% it crashes), or old one if loc processing errored out
+maybe_emit_device_up(_, #state{up = true} = State) ->
+    State;
+maybe_emit_device_up(Loc, State) ->
+    nts_event:emit_event([device, activity, up],
+                         State#state.devid,
+                         Loc,
+                         nts_utils:dtm()),
+    State#state{up = true}.
+
+maybe_emit_device_down(#state{up = false} = State) ->
+    State;
+maybe_emit_device_down(State) ->
+    nts_event:emit_event([device, activity, down],
+                         State#state.devid,
+                         State#state.loc,
+                         nts_utils:dtm()),
+    State#state{up = true}.
+

@@ -17,7 +17,7 @@
 
 % copied from nts_device
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
-    config = #{}}).
+                config = #{}, up = false}).
 
 -compile(export_all).
 

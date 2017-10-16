@@ -17,9 +17,7 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-    [simple_test, internal_state, failure].
-%%    [simple_test].
-%%    [internal_state].
+    [simple_test, internal_state, failure, events].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -27,11 +25,17 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(_, C) ->
-    nts_helpers:clear_tables(["device", "device_01"]),
+    nts_helpers:clear_tables(["device", "device_01", "events"]),
     C.
 
 end_per_suite(_Config) ->
     application:stop(nts).
+
+
+%%%===================================================================
+%%% tests
+%%%===================================================================
+
 
 simple_test(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
@@ -104,6 +108,28 @@ failure(_) ->
     process_flag(trap_exit, false),
     ?assertExit({noproc, _}, sys:get_state(Dev)),
     ok.
+
+events(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    Now0 = fromnow(0),
+    nts_device:process_frame(Dev, mkframe(0, -20)),
+    timer:sleep(1000),
+    nts_device:process_frame(Dev, mkframe(0, -10)),
+    timer:sleep(1000),
+    Now1 = fromnow(0),
+    nts_device:stop(Dev),
+    timer:sleep(1000),
+    Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(0)),
+    ct:pal("Res: ~p", [Res]),
+    [E0, E1] = Res,
+    ?assertEqual(Now0, E0#event.dtm),
+    ?assertEqual(Now1, E1#event.dtm),
+    ok.
+
+%%%===================================================================
+%%% utils
+%%%===================================================================
 
 fromnow(Offset) ->
     N = os:timestamp(),

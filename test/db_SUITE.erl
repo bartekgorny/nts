@@ -16,7 +16,6 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [locs_and_frames].
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device].
 
@@ -144,7 +143,7 @@ metrics(_) ->
 
 events(_) ->
     Loc = generate_location(-5),
-    Evt = #event{dtm = Loc#loc.dtm, device = ?DEVID, type = [event, sample],
+    Evt = #event{dtm = Loc#loc.dtm, device = ?DEVID, type = [event, sample, hey],
         lat = Loc#loc.lat, lon = Loc#loc.lon, data = Loc#loc.data},
     nts_db:save_event(Evt),
     [E1] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
@@ -153,7 +152,7 @@ events(_) ->
     ?assertEqual(Loc#loc.lat, E1#event.lat),
     ?assertEqual(Loc#loc.lon, E1#event.lon),
     ?assertEqual(-5, maps:get(<<"offset">>, E1#event.data)),
-    ?assertEqual([event, sample], E1#event.type),
+    ?assertEqual([event, sample, hey], E1#event.type),
     ok = nts_db:delete_events(?DEVID, fromnow(-10), fromnow(0)),
     [] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
     ok.

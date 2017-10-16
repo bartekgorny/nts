@@ -382,7 +382,7 @@ encode_event_type(Tags) ->
 
 decode_event_type(BType) ->
     lists:map(fun(B) -> binary_to_existing_atom(B, utf8) end,
-              binary:split(BType, <<":">>)).
+              binary:split(BType, <<":">>, [global])).
 
 parse_event({BId, DevId, BDtm, BCoords, BType, BData}) ->
     Id = binary_to_integer(BId),
