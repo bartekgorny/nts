@@ -16,7 +16,8 @@
 -compile(export_all).
 
 all() ->
-    [stabiliser].
+    [stabiliser,
+     mapper].
 
 
 init_per_suite(C) ->
@@ -55,6 +56,32 @@ stabiliser(_) ->
         [{1, 1}, {2, 2}, {3, 3}, {1000, 40}],
         {1000, 40}),
     ok.
+
+mapper(_) ->
+    SensorDefs = #{sensor_a => 1, sensor_b => 2, sensor_c => 3},
+    % straight, no custom mapping
+    ?assertEqual({sensor_a, 5}, mod_mapping:map_sensor(sensor_a, 5, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_a, 0}, mod_mapping:map_sensor(sensor_a, 0, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_a, 0}, mod_mapping:map_sensor(sensor_a, undefined, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_b, 5}, mod_mapping:map_sensor(sensor_b, 5, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_b, 0}, mod_mapping:map_sensor(sensor_b, 0, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_b, 4}, mod_mapping:map_sensor(sensor_b, undefined, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_c, 5}, mod_mapping:map_sensor(sensor_c, 5, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_c, 4}, mod_mapping:map_sensor(sensor_c, 0, 4, SensorDefs, #{})),
+    ?assertEqual({sensor_c, 4}, mod_mapping:map_sensor(sensor_c, undefined, 4, SensorDefs, #{})),
+    % remap to itself to change type
+    Conf = #{sensor_a => #{name => sensor_a, type => 3}},
+    ?assertEqual({sensor_a, 5}, mod_mapping:map_sensor(sensor_a, 5, 4, SensorDefs, Conf)),
+    ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(sensor_a, 0, 4, SensorDefs, Conf)),
+    ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(sensor_a, undefined, 4, SensorDefs, Conf)),
+    % remap from something else
+    Conf1 = #{input_a => #{name => sensor_a, type => 3}},
+    ?assertEqual({sensor_a, 5}, mod_mapping:map_sensor(input_a, 5, 4, SensorDefs, Conf1)),
+    ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(input_a, 0, 4, SensorDefs, Conf1)),
+    ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(input_a, undefined, 4, SensorDefs, Conf1)),
+    ok.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 apply_and_check(Defs, Exp) ->
     {Last, _} = apply_defs(Defs),

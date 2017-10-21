@@ -41,7 +41,7 @@
          terminate/3,
          code_change/4]).
 
--export([process_frame/2, getstate/1, getstate/2, devid/1]).
+-export([process_frame/2, getstate/1, getstate/2, devid/1, config/1, device_type/1]).
 -export([reset/1]).
 
 -define(SERVER, ?MODULE).
@@ -86,6 +86,14 @@ reset(Pid) ->
 -spec devid(state()) -> devid().
 devid(State) ->
     State#state.devid.
+
+-spec config(state()) -> map().
+config(State) ->
+    State#state.config.
+
+-spec device_type(state()) -> atom().
+device_type(State) ->
+    State#state.device_type.
 
 %%%===================================================================
 %%% gen_statem

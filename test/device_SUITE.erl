@@ -17,8 +17,14 @@
 -define(DEVID, <<"01">>).
 
 all() ->
-%%    [simple_test, internal_state, failure, events].
-    [idle_timeout].
+    [
+        simple_test,
+        internal_state,
+        failure,
+        events,
+        idle_timeout,
+        mapping
+    ].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -43,7 +49,7 @@ end_per_suite(_Config) ->
 
 simple_test(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
-    ok = nts_db:update_device(?DEVID, #{<<"cos">> => 99}),
+    ok = nts_db:update_device(?DEVID, #{cos => 99}),
     {ok, Dev} = nts_device:start_link(?DEVID),
     nts_device:process_frame(Dev, mkframe(-10, -20)),
     RecDtm = fromnow(-10),
@@ -87,7 +93,7 @@ internal_state(_) ->
     Loc1 = nts_device:getstate(Dev1),
     ?assertEqual({7, 14}, nts_location:coords(Loc1)),
     I1 = nts_device:getstate(Dev1, internal),
-    ?assertEqual([7, 9, 10], maps:get(<<"trail">>, I1)),
+    ?assertEqual([7, 9, 10], maps:get(trail, I1)),
     % reset
     nts_device:reset(Dev1),
     I1a = nts_device:getstate(Dev1, internal),
@@ -151,9 +157,40 @@ idle_timeout(_) ->
     ?assertEqual([device, activity, down], E1#event.type),
     ok.
 
+mapping(_) ->
+    ok = nts_db:create_device(?DEVID, formula, razdwatrzy),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    Sensors0 = #{sensor_a => 4,
+                 sensor_b => 4,
+                 sensor_c => 4},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors0)),
+    check_sensors(Dev, #{sensor_a => 4,
+                         sensor_b => 4,
+                         sensor_c => 4}),
+    Sensors1 = #{sensor_a => undefined,
+                 sensor_b => undefined,
+                 sensor_c => undefined},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    check_sensors(Dev, #{sensor_a => 0,
+                         sensor_b => 4,
+                         sensor_c => 4}),
+    Sensors2 = #{sensor_a => 0,
+                 sensor_b => 0,
+                 sensor_c => 0},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors2)),
+    check_sensors(Dev, #{sensor_a => 0,
+                         sensor_b => 0,
+                         sensor_c => 4}),
+    ok.
+
 %%%===================================================================
 %%% utils
 %%%===================================================================
+
+check_sensors(Dev, Exp) ->
+    Loc = nts_device:getstate(Dev),
+    lists:map(fun({K, V}) -> ?assertEqual(V, nts_location:get(sensor, K, Loc)) end,
+        maps:to_list(Exp)).
 
 fromnow(Offset) ->
     N = os:timestamp(),
@@ -161,12 +198,17 @@ fromnow(Offset) ->
     calendar:gregorian_seconds_to_datetime(Sec).
 
 mkframe(RecOffset, Offset) ->
+    mkframe(RecOffset, Offset, #{}).
+
+mkframe(RecOffset, Offset, Vals) ->
+    Values = #{dtm => fromnow(Offset),
+               latitude => -RecOffset,
+               longitude => -Offset},
     #frame{type = location,
            device = ?DEVID,
            received = fromnow(RecOffset),
-           values = #{dtm => fromnow(Offset),
-                      latitude => -RecOffset,
-                      longitude => -Offset}}.
+           values = maps:merge(Values, Vals)}.
+
 
 check_coords(Exp, Dev) ->
     S = nts_device:getstate(Dev),
@@ -181,12 +223,6 @@ has_error(Bool, Dev) ->
         false ->
             ?assertEqual(undefined, E)
     end.
-
-handler_set_coords(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
-    Data = Frame#frame.values,
-    Lat = maps:get(latitude, Data),
-    Lon = maps:get(longitude, Data),
-    {ok, nts_location:coords(Lat, Lon, NewLoc), Internal}.
 
 handler_maybe_error(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
     case nts_frame:get(latitude, Frame) of

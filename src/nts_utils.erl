@@ -13,7 +13,7 @@
 %% API
 -export([bin2hex/1, hex2bin/1]).
 -export([json_encode_map/1, json_decode_map/1, format_error/1]).
--export([time2string/1]).
+-export([time2string/1, time2bin/1, bin2time/1]).
 -export([dtm/0, distance/2]).
 
 -export([get_brackets/3, ew_table/0]).
@@ -62,7 +62,7 @@ json_encode_map(Data) ->
 json_decode_map(<<"">>) ->
     #{};
 json_decode_map(Data) ->
-    jiffy:decode(Data, [return_maps]).
+    keys_to_atoms(jiffy:decode(Data, [return_maps])).
 
 format_error({A, B}) ->
     list_to_binary(io_lib:format("~p:~p", [A, B])).
@@ -110,13 +110,33 @@ time2string(T) ->
     {{Y, M, D}, {H, Mi, S}} = T,
     lists:flatten(io_lib:format("~p-~p-~p ~p:~p:~p", [Y, M, D, H, Mi, S])).
 
+time2bin({{_, _, _}, {_, _, _}} = D) ->
+    list_to_binary(io_lib:format("~p", [D])).
+
+bin2time(B) ->
+    B1 = binary:replace(B, <<"{">>, <<>>, [global]),
+    B2 = binary:replace(B1, <<"}">>, <<>>, [global]),
+    [Y, M, D, H, Mi, S] =
+        lists:map(fun list_to_integer/1,
+                  lists:map(fun binary_to_list/1,
+                            binary:split(B2, <<",">>, [global]))),
+    {{Y, M, D}, {H, Mi, S}}.
+
+
 cookmap({{_, _, _}, {_, _, _}} = D) ->
-    list_to_binary(io_lib:format("~p", [D]));
+    time2bin(D);
 cookmap(M) when is_map(M) ->
     maps:map(fun(_, V) -> cookmap(V) end, M);
 cookmap(M) ->
     M.
-    
+
+keys_to_atoms(M) when is_map(M) ->
+    maps:from_list(
+        lists:map(fun({K, V}) -> {binary_to_existing_atom(K, utf8), keys_to_atoms(V)} end,
+                  maps:to_list(M))
+    );
+keys_to_atoms(M) ->
+    M.
     
 test() ->
     M = #{flat => dtm(), what => "a", nested => #{rien => 123, d => dtm()}},

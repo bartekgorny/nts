@@ -18,6 +18,7 @@
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device].
+%%    [locs_and_frames].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -37,7 +38,7 @@ locs_and_frames(_) ->
     F2 = <<"Frame01">>,
     R2 = fromnow(-2),
     nts_db:save_loc(?DEVID, L2, #frame{hex = false, data = F2, received = R2},
-                    #{<<"statevar">> => 22}),
+                    #{statevar => 22}),
     % last location from history
     LastDirect = nts_db:last_loc(?DEVID, Dtm2),
     ?assertEqual(Dtm2, LastDirect#loc.dtm),
@@ -51,14 +52,19 @@ locs_and_frames(_) ->
     % last loc and state
     {LastLoc, LastS} = nts_db:last_state(?DEVID),
     ?assertEqual(Dtm2, LastLoc#loc.dtm),
-    ?assertEqual(22, maps:get(<<"statevar">>, LastS)),
+    ?assertEqual(22, maps:get(statevar, LastS)),
     % history
     Hist = nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
     [H1, H2] = Hist,
     ?assertEqual(20, H1#loc.lat),
     ?assertEqual(40, H1#loc.lon),
     D = H1#loc.data,
-    ?assertEqual(-20, maps:get(<<"offset">>, D)),
+    % datetimes in status data are stored and retrieved as binaries
+    % parse them when you need
+    ?assertEqual(
+        fromnow(-20),
+        nts_utils:bin2time(maps:get(last_signal_dtm, D))),
+    ?assertEqual(-20, maps:get(offset, D)),
     ?assertEqual(18, H2#loc.lat),
     ?assertEqual(36, H2#loc.lon),
     % frames
@@ -80,7 +86,7 @@ frames_and_updates(_) ->
     L = generate_location(-31),
     nts_db:update_loc(?DEVID, F#frame.id, L, #{}),
     [L1] = nts_db:history(?DEVID, fromnow(-33), fromnow(-30)),
-    ?assertEqual(-31, maps:get(<<"offset">>, L1#loc.data)),
+    ?assertEqual(-31, maps:get(offset, L1#loc.data)),
     ok.
 
 current_state(_) ->
@@ -90,12 +96,12 @@ current_state(_) ->
     ?assertEqual(10, S1#loc.lat),
     ?assertEqual(20, S1#loc.lon),
     D = S1#loc.data,
-    ?assertEqual(-10, maps:get(<<"offset">>, D)),
+    ?assertEqual(-10, maps:get(offset, D)),
     [{?DEVID, S2}] = nts_db:current_state([?DEVID]),
     ?assertEqual(10, S2#loc.lat),
     ?assertEqual(20, S2#loc.lon),
     D2 = S2#loc.data,
-    ?assertEqual(-10, maps:get(<<"offset">>, D2)),
+    ?assertEqual(-10, maps:get(offset, D2)),
     [{?DEVID, S2}] = nts_db:current_state([?DEVID, <<"asdf">>]),
     %%
     L3 = generate_location(-9),
@@ -104,7 +110,7 @@ current_state(_) ->
     ?assertEqual(9, S3#loc.lat),
     ?assertEqual(18, S3#loc.lon),
     D3 = S3#loc.data,
-    ?assertEqual(-9, maps:get(<<"offset">>, D3)),
+    ?assertEqual(-9, maps:get(offset, D3)),
     ok.
 
 concurrency(_) ->
@@ -151,7 +157,7 @@ events(_) ->
     ?assertEqual(Loc#loc.dtm, E1#event.dtm),
     ?assertEqual(Loc#loc.lat, E1#event.lat),
     ?assertEqual(Loc#loc.lon, E1#event.lon),
-    ?assertEqual(-5, maps:get(<<"offset">>, E1#event.data)),
+    ?assertEqual(-5, maps:get(offset, E1#event.data)),
     ?assertEqual([event, sample, hey], E1#event.type),
     ok = nts_db:delete_events(?DEVID, fromnow(-10), fromnow(0)),
     [] = nts_db:event_log(?DEVID, [event, sample], fromnow(-10), fromnow(0)),
@@ -161,9 +167,9 @@ device(_) ->
     ok = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
     {error, _} = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
     {<<"0123">>, formula, <<"razdwatrzy">>, #{}} = nts_db:read_device(<<"0123">>),
-    ok = nts_db:update_device(<<"0123">>, #{<<"cos">> => 99}),
+    ok = nts_db:update_device(<<"0123">>, #{cos => 99}),
     {_, _, _, Conf} = nts_db:read_device(<<"0123">>),
-    ?assertEqual(99, maps:get(<<"cos">>, Conf)),
+    ?assertEqual(99, maps:get(cos, Conf)),
     ok = nts_db:delete_device(<<"0123">>).
 
 %%%%%%%%%%%%%%%%
