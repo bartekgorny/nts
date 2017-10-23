@@ -16,4 +16,5 @@
 
 handle_newstate(Acc, DevId, Loc, Frame, Internal) ->
     ok = nts_db:save_loc(DevId, Loc, Frame, Internal),
+    ok = nts_db:update_state(DevId, Loc),
     {ok, Acc}.

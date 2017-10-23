@@ -24,7 +24,8 @@ all() ->
         events,
         idle_timeout,
         mapping,
-        mapping_custom
+        mapping_custom,
+        state_recording
     ].
 
 init_per_suite(C) ->
@@ -36,7 +37,7 @@ init_per_testcase(events, C) ->
     event_listener:start_link(),
     init_per_testcase(generic, C);
 init_per_testcase(_, C) ->
-    nts_helpers:clear_tables(["device", "device_01", "events"]),
+    nts_helpers:clear_tables(["device", "device_01", "events", "current"]),
     C.
 
 end_per_suite(_Config) ->
@@ -212,6 +213,27 @@ mapping_custom(_) ->
     check_sensors(Dev, #{sensor_a => 4,
                          sensor_b => 0,
                          sensor_c => 0}),
+    ok.
+
+state_recording(_) ->
+    % check last loc from history
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    RecDtm = fromnow(-10),
+    Dtm = fromnow(-20),
+    LastLoc = nts_db:last_loc(?DEVID),
+    ?assertMatch({10, 20}, nts_location:coords(LastLoc)),
+    ?assertEqual(RecDtm,
+        nts_utils:bin2time(nts_location:get(status, last_signal, LastLoc))),
+    ?assertEqual(Dtm,
+        nts_utils:bin2time(nts_location:get(status, last_signal_dtm, LastLoc))),
+    CurLoc = nts_db:current_state(?DEVID),
+    ?assertMatch({10, 20}, nts_location:coords(CurLoc)),
+    ?assertEqual(RecDtm,
+        nts_utils:bin2time(nts_location:get(status, last_signal, CurLoc))),
+    ?assertEqual(Dtm,
+        nts_utils:bin2time(nts_location:get(status, last_signal_dtm, CurLoc))),
     ok.
 
 %%%===================================================================
