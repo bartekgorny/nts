@@ -169,6 +169,7 @@ handle_event(_, _Event, _StateName, _State) ->
 
 terminate(_Reason, _StateName, State) ->
     maybe_emit_device_down(State),
+    update_current_down(State#state.devid, State#state.loc),
     ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
@@ -211,10 +212,15 @@ maybe_emit_device_down(State) ->
                          State#state.devid,
                          State#state.loc,
                          nts_utils:dtm()),
-    State#state{up = true}.
+    State#state{up = false}.
 
 get_config(Name, State) ->
     case maps:get(Name, State#state.config, undefined) of
         undefined -> nts_config:get_value(Name);
         V -> V
     end.
+
+update_current_down(DevId, Loc) ->
+    Loc1 = nts_location:set(status, up, false, Loc),
+    nts_db:update_state(DevId, Loc1),
+    ok.

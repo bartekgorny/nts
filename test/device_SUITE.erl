@@ -234,6 +234,10 @@ state_recording(_) ->
         nts_utils:bin2time(nts_location:get(status, last_signal, CurLoc))),
     ?assertEqual(Dtm,
         nts_utils:bin2time(nts_location:get(status, last_signal_dtm, CurLoc))),
+    ?assertEqual(true, nts_location:get(status, up, CurLoc)),
+    nts_device:stop(Dev),
+    CurLoc2 = nts_db:current_state(?DEVID),
+    ?assertEqual(false, nts_location:get(status, up, CurLoc2)),
     ok.
 
 %%%===================================================================
