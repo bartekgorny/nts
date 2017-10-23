@@ -28,6 +28,7 @@ all() ->
         state_recording,
         config,
         sensor_events
+%%        reprocessing
     ].
 
 init_per_suite(C) ->
@@ -36,6 +37,9 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(startstop_events, C) ->
+    event_listener:start_link(),
+    init_per_testcase(generic, C);
+init_per_testcase(reprocessing, C) ->
     event_listener:start_link(),
     init_per_testcase(generic, C);
 init_per_testcase(_, C) ->
@@ -268,7 +272,7 @@ sensor_events(_) ->
     nts_device:process_frame(Dev, mkframe(-6, -12, #{ignition => 1})),
     nts_device:process_frame(Dev, mkframe(-5, -10, #{ignition => 1})),
     nts_device:process_frame(Dev, mkframe(-4, -8)),
-    CurLoc = nts_db:current_state(?DEVID),
+    CurLoc = nts_device:getstate(Dev),
     ?assertEqual(1, nts_location:get(sensor, ignition, CurLoc)),
     CurLoc1 = nts_db:current_state(?DEVID),
     ?assertEqual(1, nts_location:get(sensor, ignition, CurLoc1)),
@@ -285,6 +289,34 @@ sensor_events(_) ->
     ?assertEqual(1, maps:get(value, Eon#event.data)),
     ?assertEqual(Dtm2, Eoff#event.dtm),
     ?assertEqual(0, maps:get(value, Eoff#event.data)),
+    ok.
+
+reprocessing(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-15, -50)),
+    nts_device:process_frame(Dev, mkframe(-9, -18, #{ignition => 0})),
+    nts_device:process_frame(Dev, mkframe(-7, -14, #{ignition => 0})),
+    nts_device:process_frame(Dev, mkframe(-6, -12, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-5, -10, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-4, -8)),
+    LocationHistory = nts_db:history(?DEVID, fromnow(-20), fromnow(0)),
+    EventHistory = nts_db:event_log(?DEVID, [device],
+                                    fromnow(-20), fromnow(0)),
+    CurLoc1 = nts_device:getstate(Dev),
+    CurLoc2 = nts_db:current_state(?DEVID),
+    CurLoc3 = nts_db:last_loc(?DEVID),
+    event_listener:flush(),
+    % and now, ladies and gentlemen:
+    nts_device:reprocess_data(Dev, fromnow(-30), fromnow(0)),
+    % since we didn't change config we should get exactly the same result
+    compare_lh(LocationHistory, nts_db:history(?DEVID, fromnow(-20), fromnow(0))),
+    compare_eh(EventHistory, nts_db:event_log(?DEVID, [device],
+                                              fromnow(-20), fromnow(0))),
+    compare_loc(CurLoc1, nts_device:getstate(Dev)),
+    compare_loc(CurLoc2, nts_db:current_state(?DEVID)),
+    compare_loc(CurLoc3, nts_db:last_loc(?DEVID)),
+    [] = event_listener:flush(),
     ok.
 
 %%%===================================================================
@@ -347,3 +379,39 @@ maybe_crash_while_saving(Acc, DevId, Loc, _Frame, _Internal) ->
         _  -> ok
     end,
     {ok, Acc}.
+
+compare_loc(A, B) ->
+    ?assertEqual(A#loc.lat, B#loc.lat),
+    ?assertEqual(A#loc.lon, B#loc.lon),
+    ?assertEqual(A#loc.dtm, B#loc.dtm),
+    ?assertEqual(A#loc.dtm, B#loc.dtm),
+    ?assertEqual(A#loc.data, B#loc.data).
+
+compare_lh([], []) ->
+    ok;
+compare_lh([], _) ->
+    throw(length_mismatch);
+compare_lh(_, []) ->
+    throw(length_mismatch);
+compare_lh([A|Atail], [B|Btail]) ->
+    compare_loc(A, B),
+    compare_lh(Atail, Btail).
+
+compare_event(A, B) ->
+    ?assertEqual(A#event.device, B#event.device),
+    ?assertEqual(A#event.dtm, B#event.dtm),
+    ?assertEqual(A#event.lat, B#event.lat),
+    ?assertEqual(A#event.lon, B#event.lon),
+    ?assertEqual(A#event.data, B#event.data),
+    ?assertEqual(A#event.type, B#event.type).
+
+compare_eh([], []) ->
+    ok;
+compare_eh([], _) ->
+    throw(length_mismatch);
+compare_eh(_, []) ->
+    throw(length_mismatch);
+compare_eh([A|Atail], [B|Btail]) ->
+    compare_event(A, B),
+    compare_eh(Atail, Btail).
+

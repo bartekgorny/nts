@@ -15,29 +15,33 @@
 -export([handle_input/6]).
 
 -spec handle_input(frametype(), frame(), loc(), loc(), internal(),
-    nts_device:state()) ->
+                   nts_device:state()) ->
     {ok, loc(), internal()}.
 handle_input(location, _Frame, OldLoc, NewLoc, Internal, State) ->
     ToWatch = nts_device:get_config_param(event_triggering_sensors,
                                           State),
     DevId = nts_device:devid(State),
-    lists:map(fun(SName) -> check_sensor(SName, DevId, OldLoc, NewLoc) end,
-                ToWatch),
-    {ok, NewLoc, Internal}.
+    NewInternal = lists:foldl(fun(SName, L) ->
+                                  check_sensor(L, SName, DevId, OldLoc, NewLoc)
+                              end,
+                              Internal,
+                              ToWatch),
+    {ok, NewLoc, NewInternal}.
 
-check_sensor(SName, DevId, OldLoc, NewLoc) ->
+check_sensor(Internal, SName, DevId, OldLoc, NewLoc) ->
     OldVal = nts_location:get(sensor, SName, OldLoc),
     NewVal = nts_location:get(sensor, SName, NewLoc),
     case has_changed(OldVal, NewVal) of
         true ->
-            nts_event:emit_event([device, sensorchange, SName],
-                DevId,
-                NewLoc,
-                NewLoc#loc.dtm,
-                #{value => NewVal}
-                );
+            NEv = nts_event:create_event([device, sensorchange, SName],
+                                         DevId,
+                                         NewLoc,
+                                         NewLoc#loc.dtm,
+                                         #{value => NewVal}
+                ),
+            nts_device:add_event(NEv, Internal);
         false ->
-            ok
+            Internal
     end.
 
 has_changed(undefined, _) ->

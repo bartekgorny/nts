@@ -12,9 +12,12 @@
 -include_lib("nts/src/nts.hrl").
 
 %% API
--export([handle_newstate/5]).
+-export([handle_savestate/5, handle_publishstate/3]).
 
-handle_newstate(Acc, DevId, Loc, Frame, Internal) ->
+handle_savestate(Acc, DevId, Loc, Frame, Internal) ->
     ok = nts_db:save_loc(DevId, Loc, Frame, Internal),
+    {ok, Acc}.
+
+handle_publishstate(Acc, DevId, Loc) ->
     ok = nts_db:update_state(DevId, Loc),
     {ok, Acc}.

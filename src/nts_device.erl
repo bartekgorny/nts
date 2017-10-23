@@ -42,8 +42,8 @@
          code_change/4]).
 
 -export([process_frame/2, getstate/1, getstate/2, devid/1, config/1, device_type/1]).
--export([get_config_param/2]).
--export([reset/1]).
+-export([get_config_param/2, add_event/2]).
+-export([reset/1, reprocess_data/3]).
 
 -define(SERVER, ?MODULE).
 
@@ -112,6 +112,15 @@ get_config_param(ParamName, State) ->
         V -> V
     end.
 
+-spec add_event(event(), internal()) -> internal().
+add_event(Evt, Internal) ->
+    EventQueue = maps:get(new_events, Internal, []),
+    maps:put(new_events, [Evt|EventQueue], Internal).
+
+-spec reprocess_data(pid(), datetime(), datetime()) -> ok.
+reprocess_data(_Dev, _From, _To) ->
+    % stub
+    ok.
 
 %%%===================================================================
 %%% gen_statem
@@ -137,7 +146,7 @@ normal({call, From}, #frame{} = Frame, State) ->
     NewLoc = set_timestamps(Frame, nts_location:new()),
     case nts_hooks:run_procloc(State#state.device_type,
                                Frame#frame.type,
-        Frame,
+                               Frame,
                                OldLocation,
                                NewLoc,
                                State#state.internaldata,
@@ -159,12 +168,15 @@ normal({call, From}, #frame{} = Frame, State) ->
             keep_state_with_timeout(NewState, From);
         {NewLocation, NewInternal} ->
             NewState0 = maybe_emit_device_up(NewLocation, State),
-            % save frame and location and publish
-            case nts_hooks:run(save_state, [], [NewState0#state.devid, NewLocation,
-                Frame, NewInternal]) of
+            % save and publish events created by handlers
+            NewInternal1 = flush_events([save, publish], NewInternal),
+            % save frame and location and publish state
+            case nts_hooks:run(save_state, [],
+                               [NewState0#state.devid, NewLocation,
+                                Frame, NewInternal1]) of
                 {error, _} -> exit(self(), error_saving_data);
                 _ ->
-                    NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal},
+                    NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal1},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
                     keep_state_with_timeout(NewState, From)
             end
@@ -217,19 +229,21 @@ set_timestamps(Frame, NewLoc) ->
 maybe_emit_device_up(_, #state{up = true} = State) ->
     State;
 maybe_emit_device_up(Loc, State) ->
-    nts_event:emit_event([device, activity, up],
-                         State#state.devid,
-                         Loc,
-                         nts_utils:dtm()),
+    Evt = nts_event:create_event([device, activity, up],
+                                 State#state.devid,
+                                 Loc,
+                                 nts_utils:dtm()),
+    process_events([save, publish], [Evt]),
     State#state{up = true}.
 
 maybe_emit_device_down(#state{up = false} = State) ->
     State;
 maybe_emit_device_down(State) ->
-    nts_event:emit_event([device, activity, down],
-                         State#state.devid,
-                         State#state.loc,
-                         nts_utils:dtm()),
+    Evt = nts_event:create_event([device, activity, down],
+                                 State#state.devid,
+                                 State#state.loc,
+                                 nts_utils:dtm()),
+    process_events([save, publish], [Evt]),
     State#state{up = false}.
 
 get_config(Name, State) ->
@@ -242,3 +256,21 @@ update_current_down(DevId, Loc) ->
     Loc1 = nts_location:set(status, up, false, Loc),
     nts_db:update_state(DevId, Loc1),
     ok.
+
+flush_events(Tasks, Internal) ->
+    process_events(Tasks, maps:get(new_events, Internal, [])),
+    maps:remove(new_events, Internal).
+
+process_events([], _Q) ->
+    ok;
+process_events([H|T], Q) ->
+    process_events(H, Q),
+    process_events(T, Q);
+process_events(save, Q) ->
+    lists:map(fun nts_db:save_event/1, Q);
+process_events(publish, Q) ->
+    lists:map(fun(Evt) ->
+        EType = Evt#event.type,
+        nts_hooks:run(publish_event, [], [EType, Evt])
+              end,
+        Q).
