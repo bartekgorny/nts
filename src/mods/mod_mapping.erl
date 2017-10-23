@@ -30,10 +30,16 @@
 handle_input(location, Frame, OldLoc, NewLoc, Internal, State) ->
     Mappings = maps:get(sensor_mapping, nts_device:config(State), #{}),
     SDefs = sensor_defs(nts_device:device_type(State)),
+    % copy old values, some of them will be ovewrriten
+    NewLoc0 = lists:foldl(fun({SName, _}, Acc) ->
+                              copy_old_value(SName, OldLoc, Acc)
+                          end,
+                          NewLoc,
+                          maps:to_list(SDefs)),
     NewLoc1 = lists:foldl(fun({FromName, Val}, Acc) ->
                               map_sensor(Acc, FromName, Val, OldLoc, SDefs, Mappings)
                           end,
-                          NewLoc,
+                          NewLoc0,
                           maps:to_list(Frame#frame.values)),
     {ok, NewLoc1, Internal}.
 
@@ -83,3 +89,11 @@ sensor_defs(DType) ->
 
 to_atom(S) when is_atom(S) -> S;
 to_atom(S) when is_binary(S) ->binary_to_existing_atom(S, utf8).
+
+copy_old_value(SName, OldLoc, NewLoc) ->
+    case nts_location:get(sensor, SName, OldLoc) of
+        undefined ->
+            NewLoc;
+        V ->
+            nts_location:set(sensor, SName, V, NewLoc)
+    end.

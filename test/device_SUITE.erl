@@ -21,11 +21,13 @@ all() ->
         simple_test,
         internal_state,
         failure,
-        events,
+        startstop_events,
         idle_timeout,
         mapping,
         mapping_custom,
-        state_recording
+        state_recording,
+        config,
+        sensor_events
     ].
 
 init_per_suite(C) ->
@@ -33,7 +35,7 @@ init_per_suite(C) ->
     nts_helpers:change_config(C, "nts.cfg"),
     C.
 
-init_per_testcase(events, C) ->
+init_per_testcase(startstop_events, C) ->
     event_listener:start_link(),
     init_per_testcase(generic, C);
 init_per_testcase(_, C) ->
@@ -121,7 +123,7 @@ failure(_) ->
     ?assertExit({noproc, _}, sys:get_state(Dev)),
     ok.
 
-events(_) ->
+startstop_events(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Dev} = nts_device:start_link(?DEVID),
     Now0 = fromnow(0),
@@ -238,6 +240,51 @@ state_recording(_) ->
     nts_device:stop(Dev),
     CurLoc2 = nts_db:current_state(?DEVID),
     ?assertEqual(false, nts_location:get(status, up, CurLoc2)),
+    ok.
+
+config(_) ->
+    ok = nts_db:create_device(<<"01">>, xbox, <<"razdwatrzy">>),
+    {ok, Dev1} = nts_device:start_link(<<"01">>),
+    {normal, State1} = sys:get_state(Dev1),
+    ?assertEqual(1, nts_device:get_config_param(testparam, State1)),
+    ok = nts_db:create_device(<<"02">>, formula, <<"razdwatrzy">>),
+    {ok, Dev2} = nts_device:start_link(<<"02">>),
+    {normal, State2} = sys:get_state(Dev2),
+    ?assertEqual(2, nts_device:get_config_param(testparam, State2)),
+    ok = nts_db:create_device(<<"03">>, xbox, <<"razdwatrzy">>),
+    ok = nts_db:update_device(<<"03">>, #{testparam => 3}),
+    {ok, Dev3} = nts_device:start_link(<<"03">>),
+    {normal, State3} = sys:get_state(Dev3),
+    ?assertEqual(3, nts_device:get_config_param(testparam, State3)),
+    ok.
+
+sensor_events(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    nts_device:process_frame(Dev, mkframe(-9, -18, #{ignition => 0})),
+    nts_device:process_frame(Dev, mkframe(-7, -14, #{ignition => 0})),
+    Dtm1 = fromnow(-12),
+    nts_device:process_frame(Dev, mkframe(-6, -12, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-5, -10, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-4, -8)),
+    CurLoc = nts_db:current_state(?DEVID),
+    ?assertEqual(1, nts_location:get(sensor, ignition, CurLoc)),
+    CurLoc1 = nts_db:current_state(?DEVID),
+    ?assertEqual(1, nts_location:get(sensor, ignition, CurLoc1)),
+    CurLoc2 = nts_db:last_loc(?DEVID),
+    ?assertEqual(1, nts_location:get(sensor, ignition, CurLoc2)),
+    Dtm2 = fromnow(-6),
+    nts_device:process_frame(Dev, mkframe(-3, -6, #{ignition => 0})),
+    % now we should have two events
+    Res = nts_db:event_log(?DEVID, [device, sensorchange, ignition],
+                           fromnow(-20), fromnow(0)),
+    ct:pal("Res: ~p", [Res]),
+    [Eon, Eoff] = Res,
+    ?assertEqual(Dtm1, Eon#event.dtm),
+    ?assertEqual(1, maps:get(value, Eon#event.data)),
+    ?assertEqual(Dtm2, Eoff#event.dtm),
+    ?assertEqual(0, maps:get(value, Eoff#event.data)),
     ok.
 
 %%%===================================================================

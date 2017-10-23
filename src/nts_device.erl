@@ -42,6 +42,7 @@
          code_change/4]).
 
 -export([process_frame/2, getstate/1, getstate/2, devid/1, config/1, device_type/1]).
+-export([get_config_param/2]).
 -export([reset/1]).
 
 -define(SERVER, ?MODULE).
@@ -60,7 +61,7 @@
 %%--------------------------------------------------------------------
 -spec(start_link(devid()) -> {ok, pid()} | ignore | {error, Reason :: term()}).
 start_link(DevId) ->
-    gen_statem:start_link({local, ?SERVER}, ?MODULE, [DevId], []).
+    gen_statem:start_link({global, DevId}, ?MODULE, [DevId], []).
 
 stop(Pid) ->
     gen_statem:stop(Pid).
@@ -81,7 +82,7 @@ getstate(Pid, internal) ->
 reset(Pid) ->
     gen_statem:call(Pid, reset_internal_state).
 
-% state accessors
+% state accessors (for hook handlers which get the whole state)
 
 -spec devid(state()) -> devid().
 devid(State) ->
@@ -94,6 +95,23 @@ config(State) ->
 -spec device_type(state()) -> atom().
 device_type(State) ->
     State#state.device_type.
+
+%% @doc get configuration parameter from this device, or for this
+%% device type, or default for any device
+-spec get_config_param(atom(), state()) -> any().
+get_config_param(ParamName, State) ->
+    Conf = State#state.config,
+    DType = State#state.device_type,
+    case maps:get(ParamName, Conf, undefined) of
+        undefined ->
+            case nts_config:get_value([device, DType, ParamName]) of
+                undefined ->
+                    nts_config:get_value(ParamName);
+                V -> V
+            end;
+        V -> V
+    end.
+
 
 %%%===================================================================
 %%% gen_statem

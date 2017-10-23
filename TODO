@@ -5,7 +5,7 @@ v zm. gen_fsm na gen_statem
 v get fresh loc on dev startup
 v save loc
 - eventologia
-- mappingi
+v mappingi
 - reprocessing data
 - changing mapping should reset device state and be stored in location so that we do same
   when reprocessing (otherwise old mapping result would stay there forever)
