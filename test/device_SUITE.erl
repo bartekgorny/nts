@@ -23,7 +23,8 @@ all() ->
         failure,
         events,
         idle_timeout,
-        mapping
+        mapping,
+        mapping_custom
     ].
 
 init_per_suite(C) ->
@@ -181,6 +182,36 @@ mapping(_) ->
     check_sensors(Dev, #{sensor_a => 0,
                          sensor_b => 0,
                          sensor_c => 4}),
+    ok.
+
+mapping_custom(_) ->
+    ok = nts_db:create_device(?DEVID, formula, razdwatrzy),
+    Mappings = #{input_1 => #{name => sensor_a, type => 3},
+                 input_2 => #{name => sensor_b, type => 2},
+                 sensor_c => #{name => sensor_c, type => 1}},
+    ok = nts_db:update_device(?DEVID, #{sensor_mapping => Mappings}),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    Sensors0 = #{input_1 => 4,
+                 input_2 => 4,
+                 sensor_c => 4},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors0)),
+    check_sensors(Dev, #{sensor_a => 4,
+                         sensor_b => 4,
+                         sensor_c => 4}),
+    Sensors1 = #{input_1 => undefined,
+                 input_2 => undefined,
+                 sensor_c => undefined},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    check_sensors(Dev, #{sensor_a => 4,
+                         sensor_b => 4,
+                         sensor_c => 0}),
+    Sensors2 = #{input_1 => 0,
+                 input_2 => 0,
+                 sensor_c => 0},
+    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors2)),
+    check_sensors(Dev, #{sensor_a => 4,
+                         sensor_b => 0,
+                         sensor_c => 0}),
     ok.
 
 %%%===================================================================

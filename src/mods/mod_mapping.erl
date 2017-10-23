@@ -24,41 +24,43 @@
 %% test API
 -export([map_sensor/5, sensor_defs/1]).
 
+-spec handle_input(frametype(), frame(), loc(), loc(), internal(),
+                   nts_device:state()) ->
+    {ok, loc(), internal()}.
 handle_input(location, Frame, OldLoc, NewLoc, Internal, State) ->
-    ?ERROR_MSG("Frame: ~p~n", [Frame]),
     Mappings = maps:get(sensor_mapping, nts_device:config(State), #{}),
     SDefs = sensor_defs(nts_device:device_type(State)),
-    NewLoc1 = lists:foldl(fun({BName, Val}, Acc) ->
-                              map_sensor(Acc, BName, Val, OldLoc, SDefs, Mappings)
+    NewLoc1 = lists:foldl(fun({FromName, Val}, Acc) ->
+                              map_sensor(Acc, FromName, Val, OldLoc, SDefs, Mappings)
                           end,
                           NewLoc,
                           maps:to_list(Frame#frame.values)),
     {ok, NewLoc1, Internal}.
 
 
-map_sensor(NewLoc, BName, Val, OldLoc, SDefs, Mappings) ->
-    Name = case maps:get(BName, Mappings, undefined) of
-               undefined ->
-                   BName;
-               CDef ->
-                   maps:get(name, CDef)
-           end,
-    PVal = nts_location:get(sensor, Name, OldLoc),
-    case map_sensor(BName, Val, PVal, SDefs, Mappings) of
+map_sensor(NewLoc, FromName, Val, OldLoc, SDefs, Mappings) ->
+    ToName = case maps:get(FromName, Mappings, undefined) of
+                 undefined ->
+                     FromName;
+                 CDef ->
+                     to_atom(maps:get(name, CDef))
+             end,
+    PVal = nts_location:get(sensor, ToName, OldLoc),
+    case map_sensor(FromName, Val, PVal, SDefs, Mappings) of
         undefined -> NewLoc;
-        {Name, NVal} -> nts_location:set(sensor, Name, NVal, NewLoc)
+        {ToName, NVal} -> nts_location:set(sensor, ToName, NVal, NewLoc)
     end.
 
-map_sensor(BName, Val, PVal, SDefs, Mappings) ->
-    case maps:get(BName, Mappings, undefined) of
+map_sensor(FromName, Val, PVal, SDefs, Mappings) ->
+    case maps:get(FromName, Mappings, undefined) of
         undefined ->
-            Name = to_atom(BName),
-            case maps:get(Name, SDefs, undefined) of
+            case maps:get(FromName, SDefs, undefined) of
                 undefined -> undefined;
-                Type -> {BName, proc_value(Type, Val, PVal)}
+                Type -> {FromName, proc_value(Type, Val, PVal)}
             end;
         CDef ->
-            {maps:get(name, CDef), proc_value(maps:get(type, CDef), Val, PVal)}
+            {to_atom(maps:get(name, CDef)),
+             proc_value(maps:get(type, CDef), Val, PVal)}
     end.
 
 proc_value(1, undefined, _) ->
