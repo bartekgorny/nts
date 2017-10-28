@@ -43,7 +43,7 @@
 
 -export([process_frame/2, getstate/1, getstate/2, devid/1, config/1, device_type/1]).
 -export([get_config_param/2, add_event/2]).
--export([reset/1, reprocess_data/3]).
+-export([reset/1, reprocess_data/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -104,7 +104,7 @@ get_config_param(ParamName, State) ->
     DType = State#state.device_type,
     case maps:get(ParamName, Conf, undefined) of
         undefined ->
-            case nts_config:get_value([device, DType, ParamName]) of
+            case nts_config:get_value([device_types, DType, ParamName]) of
                 undefined ->
                     nts_config:get_value(ParamName);
                 V -> V
@@ -117,10 +117,9 @@ add_event(Evt, Internal) ->
     EventQueue = maps:get(new_events, Internal, []),
     maps:put(new_events, [Evt|EventQueue], Internal).
 
--spec reprocess_data(pid(), datetime(), datetime()) -> ok.
-reprocess_data(_Dev, _From, _To) ->
-    % stub
-    ok.
+-spec reprocess_data(pid(), datetime()) -> ok.
+reprocess_data(Dev, From) ->
+    gen_statem:call(Dev, {reprocess_data, From}).
 
 %%%===================================================================
 %%% gen_statem
@@ -128,19 +127,18 @@ reprocess_data(_Dev, _From, _To) ->
 
 init([DevId]) ->
     process_flag(trap_exit, true),
-    {_, DType, Label, Config} = nts_db:read_device(DevId),
-    {Loc, Internal} =  case nts_db:last_state(DevId) of
-                           undefined -> {#loc{}, #{}};
-                           R -> R
-                       end,
-    {ok, normal, #state{devid = DevId, device_type = DType, label = Label,
-                        config = Config, loc = Loc, internaldata = Internal}}.
+    State = initialize_device(DevId),
+    {ok, normal, State}.
 
 callback_mode() -> [state_functions].
 
+normal({call, From}, {reprocess_data, FromDtm}, State) ->
+    NextState = do_reprocess_data(FromDtm, State),
+    {keep_state, NextState, [{reply, From, ok}]};
 normal(state_timeout, idle, _State) ->
     {stop, idle_timeout};
 normal({call, From}, #frame{} = Frame, State) ->
+    % here we handle fresh frame from a device
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Frame, nts_location:new()),
@@ -156,17 +154,19 @@ normal({call, From}, #frame{} = Frame, State) ->
             % mark location as errored so that this info is published
             Es = nts_utils:format_error(E),
             NewLocation = nts_location:set(status, error, Es, OldLocation),
+            NewLocation0 = nts_location:set(status, up, true, NewLocation),
             % update timestamps, leave the rest unchanged
-            NewLocation1 = set_timestamps(Frame, NewLocation),
+            NewLocation1 = set_timestamps(Frame, NewLocation0),
             % do not change internal state as it might be corrupt
             NewState0 = State#state{loc = NewLocation1},
             NewState = maybe_emit_device_up(OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                 Frame, State#state.internaldata]),
-            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
+            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation1]),
             keep_state_with_timeout(NewState, From);
-        {NewLocation, NewInternal} ->
+        {NewLocation0, NewInternal} ->
+            NewLocation = nts_location:set(status, up, true, NewLocation0),
             NewState0 = maybe_emit_device_up(NewLocation, State),
             % save and publish events created by handlers
             NewInternal1 = flush_events([save, publish], NewInternal),
@@ -174,7 +174,8 @@ normal({call, From}, #frame{} = Frame, State) ->
             case nts_hooks:run(save_state, [],
                                [NewState0#state.devid, NewLocation,
                                 Frame, NewInternal1]) of
-                {error, _} -> exit(self(), error_saving_data);
+                {error, _} ->
+                    exit(self(), error_saving_data);
                 _ ->
                     NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal1},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
@@ -209,6 +210,18 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+initialize_device(DevId) ->
+    initialize_device(DevId, nts_utils:dtm()).
+
+initialize_device(DevId, Dtm) ->
+    {_, DType, Label, Config} = nts_db:read_device(DevId),
+    {Loc, Internal} =  case nts_db:last_state(DevId, Dtm) of
+                           undefined -> {#loc{}, #{}};
+                           R -> R
+                       end,
+    #state{devid = DevId, device_type = DType, label = Label,
+           config = Config, loc = Loc, internaldata = Internal}.
+
 keep_state_with_timeout(NewState, From) ->
     TVal = get_config(idle_timeout, NewState),
     {keep_state, NewState, [{reply, From, ok},
@@ -218,7 +231,7 @@ set_timestamps(Frame, NewLoc) ->
     NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
     case maps:get(dtm, Frame#frame.values, undefined) of
         undefined -> % lame - should never happen, devices should set timestamps
-            NewLoc1#loc{dtm = os:timestamp()};
+            NewLoc1#loc{dtm = Frame#frame.received};
         Dtm ->
             NewLoc2 = nts_location:set(status, last_signal_dtm, Dtm, NewLoc1),
             NewLoc2#loc{dtm = Dtm}
@@ -270,7 +283,70 @@ process_events(save, Q) ->
     lists:map(fun nts_db:save_event/1, Q);
 process_events(publish, Q) ->
     lists:map(fun(Evt) ->
-        EType = Evt#event.type,
-        nts_hooks:run(publish_event, [], [EType, Evt])
+                  EType = Evt#event.type,
+                  nts_hooks:run(publish_event, [], [EType, Evt])
               end,
-        Q).
+              Q).
+
+do_reprocess_data(FromDtm, State) ->
+    % TODO transaction
+    DevId = devid(State),
+    StartState = initialize_device(DevId, FromDtm),
+    nts_db:clear_events(DevId, FromDtm),
+    Hist = nts_db:full_history(DevId, FromDtm, nts_utils:dtm()),
+    CurrentState = lists:foldl(fun reprocess_record/2, StartState, Hist),
+    % here update current table
+    CurrentState.
+
+reprocess_record({Fr, Loc}, State) ->
+    Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data, Fr#frame.received),
+    reprocess_frame(Loc, Frame, State).
+
+reprocess_frame(Loc, Frame, State) ->
+    % clear previous error
+    OldLocation = nts_location:remove(status, error, State#state.loc),
+    NewLoc = set_timestamps(Frame, nts_location:new()),
+    case nts_hooks:run_procloc(State#state.device_type,
+                               Frame#frame.type,
+                               Frame,
+                               OldLocation,
+                               NewLoc,
+                               State#state.internaldata,
+                               State) of
+        {error, E} ->
+            % it has already been logged
+            % mark location as errored so that this info is published
+            Es = nts_utils:format_error(E),
+            NewLocation0 = nts_location:set(status, error, Es, OldLocation),
+            % do not change activity status
+            NewLocation = nts_location:set(status, up, get_up_status(Loc), NewLocation0),
+            % update timestamps, leave the rest unchanged
+            NewLocation1 = set_timestamps(Frame, NewLocation),
+            % do not change internal state as it might be corrupt
+            NewState = State#state{loc = NewLocation1},
+            % save frame & location and publish
+            nts_hooks:run(save_state, [], [State#state.devid, NewLocation1,
+                          Frame, State#state.internaldata]),
+            NewState;
+        {NewLocation0, NewInternal} ->
+            % do not change activity status
+            NewLocation = nts_location:set(status, up, get_up_status(Loc), NewLocation0),
+            % save and publish events created by handlers
+            NewInternal1 = flush_events([save], NewInternal),
+            % save frame and location and publish state
+            case nts_hooks:run(save_state, [],
+                               [State#state.devid, NewLocation,
+                                Frame, NewInternal1]) of
+                {error, _} ->
+                    exit(self(), error_saving_data);
+                _ ->
+                    nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
+                    State#state{loc = NewLocation, internaldata = NewInternal1}
+            end
+    end.
+
+get_up_status(Loc) ->
+    case nts_location:get(status, up, Loc) of
+        undefined -> false;
+        S -> S
+    end.

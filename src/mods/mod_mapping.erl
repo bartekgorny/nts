@@ -85,7 +85,7 @@ proc_value(3, Val, _) ->
     Val.
 
 sensor_defs(DType) ->
-    maps:merge(nts_config:get_value(sensors), nts_config:get_value([device, DType, sensors], #{})).
+    maps:merge(nts_config:get_value(sensors), nts_config:get_value([device_types, DType, sensors], #{})).
 
 to_atom(S) when is_atom(S) -> S;
 to_atom(S) when is_binary(S) ->binary_to_existing_atom(S, utf8).

@@ -46,7 +46,7 @@ locs_and_frames(_) ->
     LastIndirect = nts_db:last_loc(?DEVID, fromnow(-10)),
     ?assertEqual(Dtm2, LastIndirect#loc.dtm),
     ?assertEqual(18, LastIndirect#loc.lat),
-    Null = nts_db:last_loc(?DEVID, fromnow(-22)),
+    {Null, _} = nts_db:last_loc(?DEVID, fromnow(-22)),
     ?assertEqual(undefined, Null#loc.dtm),
     ?assertEqual(0.0, Null#loc.lat),
     % last loc and state

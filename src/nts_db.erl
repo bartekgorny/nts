@@ -14,8 +14,9 @@
 %% API
 -export([query/1, history/1, history/3, save_loc/4]).
 -export([frames/3, save_frame/2, update_loc/4, update_state/2]).
+-export([full_history/3]).
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
--export([save_event/1, event_log/4, delete_events/3]).
+-export([save_event/1, event_log/4, delete_events/3, clear_events/2]).
 -export([create_device/3, read_device/1, update_device/2, delete_device/1]).
 
 
@@ -73,7 +74,22 @@ frames(DevId, Start, Stop) ->
     case query(Q) of
         {error, E} -> {error, E};
         {_, Vals} ->
-            lists:map(fun(F) -> convert_frame(DevId, F) end, Vals)
+            lists:map(fun(F) -> parse_frame(DevId, F) end, Vals)
+    end.
+
+-spec full_history(devid(), datetime(), datetime()) -> [{frame(), loc()}] | {error, any()}.
+full_history(DevId, Start, Stop) ->
+    Q = "SELECT id, hex, frame, received, dtm, coords, data FROM device_" ++
+        binary_to_list(DevId) ++
+        " WHERE received > '" ++
+        nts_utils:time2string(Start) ++
+        "' AND received < '" ++
+        nts_utils:time2string(Stop) ++
+        "' ORDER BY dtm",
+    case query(Q) of
+        {error, E} -> {error, E};
+        {_, Vals} ->
+            lists:map(fun(F) -> convert_both(DevId, F) end, Vals)
     end.
 
 %% @doc if we receive new info we calculate new state of device and save it here, together
@@ -173,7 +189,7 @@ get_last_loc(DevId, Dtm, Fields) ->
             case query(Qindirect) of
                 {error, E} -> {error, E};
                 {_, [R1]} -> parse_loc(R1);
-                {_, []} -> #loc{}
+                {_, []} -> {#loc{}, #{}}
             end
     end.
 
@@ -242,6 +258,17 @@ delete_events(DevId, Start, Stop) ->
         quote(nts_utils:time2string(Start)) ++
         " AND dtm < " ++
         quote(nts_utils:time2string(Stop)) ++
+        " AND device = " ++ quote(DevId),
+    query(Q).
+
+%% @doc Remove all events except for 'device up' and 'device down'
+%% for use when reprocessing data - we will recreate all the other events
+-spec clear_events(devid(), datetime()) -> ok | {error, atom()}.
+clear_events(DevId, Start) ->
+    Q = "DELETE FROM events" ++
+        " WHERE dtm > " ++
+        quote(nts_utils:time2string(Start)) ++
+        " AND type NOT LIKE 'device:activity:%' " ++
         " AND device = " ++ quote(DevId),
     query(Q).
 
@@ -352,7 +379,7 @@ list_to_arith(L) ->
         _ -> list_to_float(L)
     end.
 
-convert_frame(DevId, R) ->
+parse_frame(DevId, R) ->
     {BId, BHex, Frame, BRec} = R,
     Id = binary_to_integer(BId),
     Hex = bin2bool(BHex),
@@ -363,6 +390,18 @@ convert_frame(DevId, R) ->
            end,
     #frame{id = Id, device = DevId, hex = Hex, data = Data, received = Rec}.
 
+convert_both(DevId, R) ->
+    {BId, BHex, BFrame, BRec, BDtm, BCoords, BData} = R,
+    Id = binary_to_integer(BId),
+    Hex = bin2bool(BHex),
+    Rec = parse_binary_datetime(BRec),
+    Data = case Hex of
+               true -> nts_utils:hex2bin(BFrame);
+               false -> BFrame
+           end,
+    Frame = #frame{id = Id, device = DevId, hex = Hex, data = Data, received = Rec},
+    Loc = parse_loc({BId, BDtm, BCoords, BData}),
+    {Frame, Loc}.
 
 bin2bool(<<"t">>) -> true;
 bin2bool(<<"f">>) -> false.

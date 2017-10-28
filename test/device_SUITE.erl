@@ -27,8 +27,8 @@ all() ->
         mapping_custom,
         state_recording,
         config,
-        sensor_events
-%%        reprocessing
+        sensor_events,
+        reprocessing
     ].
 
 init_per_suite(C) ->
@@ -139,7 +139,6 @@ startstop_events(_) ->
     nts_device:stop(Dev),
     timer:sleep(1000),
     Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(0)),
-    ct:pal("Res: ~p", [Res]),
     [E0, E1] = Res,
     ?assertEqual(Now0, E0#event.dtm),
     ?assertEqual(Now1, E1#event.dtm),
@@ -283,7 +282,6 @@ sensor_events(_) ->
     % now we should have two events
     Res = nts_db:event_log(?DEVID, [device, sensorchange, ignition],
                            fromnow(-20), fromnow(0)),
-    ct:pal("Res: ~p", [Res]),
     [Eon, Eoff] = Res,
     ?assertEqual(Dtm1, Eon#event.dtm),
     ?assertEqual(1, maps:get(value, Eon#event.data)),
@@ -308,7 +306,7 @@ reprocessing(_) ->
     CurLoc3 = nts_db:last_loc(?DEVID),
     event_listener:flush(),
     % and now, ladies and gentlemen:
-    nts_device:reprocess_data(Dev, fromnow(-30), fromnow(0)),
+    Res = nts_device:reprocess_data(Dev, fromnow(-30)),
     % since we didn't change config we should get exactly the same result
     compare_lh(LocationHistory, nts_db:history(?DEVID, fromnow(-20), fromnow(0))),
     compare_eh(EventHistory, nts_db:event_log(?DEVID, [device],
@@ -339,11 +337,15 @@ mkframe(RecOffset, Offset) ->
 mkframe(RecOffset, Offset, Vals) ->
     Values = #{dtm => fromnow(Offset),
                latitude => -RecOffset,
+               type => <<"location">>,
+               devid => ?DEVID,
                longitude => -Offset},
+    V = maps:merge(Values, Vals),
     #frame{type = location,
            device = ?DEVID,
            received = fromnow(RecOffset),
-           values = maps:merge(Values, Vals)}.
+           values = V,
+           data = nts_utils:json_encode_map(V)}.
 
 
 check_coords(Exp, Dev) ->

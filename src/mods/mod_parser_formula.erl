@@ -23,12 +23,6 @@ parse_frame(Frame) ->
 
 process_fields([], _, Acc) -> Acc;
 process_fields([F|Tail], [Val|VTail], Acc) ->
-%%    {Key, NVal} = case F of
-%%                      {K, Func} ->
-%%                          {K, erlang:Func(Val)};
-%%                      {K, Mod, Func} ->
-%%                          {K, Mod:Func(Val)}
-%%                  end,
     {Key, Func} = F,
     NVal = erlang:Func(Val),
     Acc1 = maps:put(Key, NVal, Acc),
