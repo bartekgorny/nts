@@ -175,7 +175,8 @@ normal({call, From}, #frame{} = Frame, State) ->
                                [NewState0#state.devid, NewLocation,
                                 Frame, NewInternal1]) of
                 {error, _} ->
-                    exit(self(), error_saving_data);
+                    exit(self(), error_saving_data),
+                    keep_state_and_data;
                 _ ->
                     NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal1},
                     nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
@@ -266,8 +267,12 @@ get_config(Name, State) ->
     end.
 
 update_current_down(DevId, Loc) ->
-    Loc1 = nts_location:set(status, up, false, Loc),
-    nts_db:update_state(DevId, Loc1),
+    case nts_location:dtm(Loc) of
+        undefined -> ok; % empty state, we don't care
+        _ ->
+            Loc1 = nts_location:set(status, up, false, Loc),
+            nts_db:update_state(DevId, Loc1)
+    end,
     ok.
 
 flush_events(Tasks, Internal) ->
@@ -295,7 +300,9 @@ do_reprocess_data(FromDtm, State) ->
     nts_db:clear_events(DevId, FromDtm),
     Hist = nts_db:full_history(DevId, FromDtm, nts_utils:dtm()),
     CurrentState = lists:foldl(fun reprocess_record/2, StartState, Hist),
-    % here update current table
+    % when we're done update current table
+    nts_hooks:run(publish_state, [], [State#state.devid,
+                                      CurrentState#state.loc]),
     CurrentState.
 
 reprocess_record({Fr, Loc}, State) ->
@@ -324,7 +331,7 @@ reprocess_frame(Loc, Frame, State) ->
             NewLocation1 = set_timestamps(Frame, NewLocation),
             % do not change internal state as it might be corrupt
             NewState = State#state{loc = NewLocation1},
-            % save frame & location and publish
+            % save recalculated location
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation1,
                           Frame, State#state.internaldata]),
             NewState;
@@ -340,7 +347,6 @@ reprocess_frame(Loc, Frame, State) ->
                 {error, _} ->
                     exit(self(), error_saving_data);
                 _ ->
-                    nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
                     State#state{loc = NewLocation, internaldata = NewInternal1}
             end
     end.

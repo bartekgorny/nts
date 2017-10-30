@@ -37,14 +37,22 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(startstop_events, C) ->
-    event_listener:start_link(),
     init_per_testcase(generic, C);
 init_per_testcase(reprocessing, C) ->
-    event_listener:start_link(),
     init_per_testcase(generic, C);
 init_per_testcase(_, C) ->
     nts_helpers:clear_tables(["device", "device_01", "events", "current"]),
+    event_listener:start_link(),
     C.
+
+end_per_testcase(_, _) ->
+    event_listener:flush(),
+    case global:whereis_name(?DEVID) of
+        undefined -> ok;
+        Dev ->
+            nts_device:stop(Dev)
+    end,
+    ok.
 
 end_per_suite(_Config) ->
     application:stop(nts).
@@ -142,7 +150,8 @@ startstop_events(_) ->
     [E0, E1] = Res,
     ?assertEqual(Now0, E0#event.dtm),
     ?assertEqual(Now1, E1#event.dtm),
-    FlushRes = event_listener:flush(),
+    % filter out current state
+    FlushRes = [{EType, E} || {EType, #event{} = E} <- event_listener:flush()],
     [{P0Type, P0}, {P1Type, P1}] = FlushRes,
     ?assertEqual(Now0, P0#event.dtm),
     ?assertEqual(Now1, P1#event.dtm),
@@ -259,6 +268,8 @@ config(_) ->
     {ok, Dev3} = nts_device:start_link(<<"03">>),
     {normal, State3} = sys:get_state(Dev3),
     ?assertEqual(3, nts_device:get_config_param(testparam, State3)),
+    nts_device:stop(Dev2),
+    nts_device:stop(Dev3),
     ok.
 
 sensor_events(_) ->
@@ -306,7 +317,7 @@ reprocessing(_) ->
     CurLoc3 = nts_db:last_loc(?DEVID),
     event_listener:flush(),
     % and now, ladies and gentlemen:
-    Res = nts_device:reprocess_data(Dev, fromnow(-30)),
+    nts_device:reprocess_data(Dev, fromnow(-30)),
     % since we didn't change config we should get exactly the same result
     compare_lh(LocationHistory, nts_db:history(?DEVID, fromnow(-20), fromnow(0))),
     compare_eh(EventHistory, nts_db:event_log(?DEVID, [device],
@@ -314,7 +325,8 @@ reprocessing(_) ->
     compare_loc(CurLoc1, nts_device:getstate(Dev)),
     compare_loc(CurLoc2, nts_db:current_state(?DEVID)),
     compare_loc(CurLoc3, nts_db:last_loc(?DEVID)),
-    [] = event_listener:flush(),
+    % there should be only one event: new current state after reprocessing
+    [{current_state, ?DEVID}] = event_listener:flush(),
     ok.
 
 %%%===================================================================

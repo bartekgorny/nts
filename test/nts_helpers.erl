@@ -12,9 +12,14 @@
 %% API
 -export([clear_tables/1, set_config/1, change_config/2, make_filename/2]).
 
+-include_lib("nts/src/nts.hrl").
 clear_tables([]) -> ok;
 clear_tables([T|Rest]) ->
-    nts_db:query("DELETE FROM " ++ T),
+    case nts_db:query("SELECT * FROM " ++ T) of
+        {_, []} -> ok;
+        _ ->
+            nts_db:query("DELETE FROM " ++ T)
+    end,
     clear_tables(Rest).
 
 set_config(Config) ->

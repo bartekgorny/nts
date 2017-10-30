@@ -10,6 +10,7 @@
 -author("bartekgorny").
 
 -behaviour(gen_server).
+-include_lib("nts/src/nts.hrl").
 
 %% API
 -export([start_link/0, stop/0]).
@@ -25,7 +26,7 @@
 -export([send/1, flush/0]).
 
 % hook handler
--export([publish_event/3]).
+-export([publish_event/3, publish_state/3]).
 
 -define(SERVER, ?MODULE).
 
@@ -40,6 +41,11 @@ send(Evt) ->
 publish_event(Acc, EType, Evt) ->
     send({EType, Evt}),
     {ok, Acc}.
+
+publish_state(Acc, DevId, _Loc) ->
+    send({current_state, DevId}),
+    {ok, Acc}.
+
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
