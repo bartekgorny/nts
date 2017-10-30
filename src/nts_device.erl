@@ -135,7 +135,7 @@ callback_mode() -> [state_functions].
 normal({call, From}, {reprocess_data, FromDtm}, State) ->
     NextState = do_reprocess_data(FromDtm, State),
     {keep_state, NextState, [{reply, From, ok}]};
-normal(state_timeout, idle, _State) ->
+normal(event_timeout, idle, _State) ->
     {stop, idle_timeout};
 normal({call, From}, #frame{} = Frame, State) ->
     % here we handle fresh frame from a device
@@ -226,7 +226,7 @@ initialize_device(DevId, Dtm) ->
 keep_state_with_timeout(NewState, From) ->
     TVal = get_config(idle_timeout, NewState),
     {keep_state, NewState, [{reply, From, ok},
-                            {state_timeout, TVal * 1000, idle}]}.
+                            {event_timeout, TVal * 1000, idle}]}.
 
 set_timestamps(Frame, NewLoc) ->
     NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
