@@ -18,11 +18,13 @@
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device].
-%%    [locs_and_frames].
+%%    [device].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
+    ok = file:make_dir("priv"),
+    {ok, _} = file:copy("../../lib/nts/priv/pg_device.sql", "priv/pg_device.sql"),
     C.
 
 end_per_suite(_Config) ->
@@ -170,7 +172,15 @@ device(_) ->
     ok = nts_db:update_device(<<"0123">>, #{cos => 99}),
     {_, _, _, Conf} = nts_db:read_device(<<"0123">>),
     ?assertEqual(99, maps:get(cos, Conf)),
-    ok = nts_db:delete_device(<<"0123">>).
+    {error, _} = nts_db:history(<<"0123">>),
+    nts_db:initialise_device(<<"0123">>),
+    [] = nts_db:history(<<"0123">>),
+    ok = nts_db:delete_device(<<"0123">>),
+    undefined = nts_db:read_device(<<"0123">>),
+    [] = nts_db:history(<<"0123">>),
+    nts_db:purge_device(<<"0123">>),
+    {error, _} = nts_db:history(<<"0123">>),
+    ok.
 
 %%%%%%%%%%%%%%%%
 

@@ -18,6 +18,7 @@
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
 -export([save_event/1, event_log/4, delete_events/3, clear_events/2]).
 -export([create_device/3, read_device/1, update_device/2, delete_device/1]).
+-export([initialise_device/1, purge_device/1]).
 
 
 query(Q) ->
@@ -281,6 +282,27 @@ create_device(DevId, Type, Label) ->
         "," ++
         quote(Label) ++
         ", '{}')",
+    query(Q).
+
+-spec initialise_device(devid()) -> ok | {error, atom()}.
+initialise_device(DevId) ->
+    {ok, S} = file:read_file("priv/pg_device.sql"),
+    Nid = <<"device_", DevId/binary>>,
+    NS = binary:replace(S, <<"device_01">>, Nid, [global]),
+    NSL1 = binary:split(NS, <<"\n">>, [global]),
+    NSL2 = lists:filter(fun(Q) -> Q /= <<"">> andalso binary:part(Q, {0, 2}) /= <<"--">> end, NSL1),
+    NS2 = lists:foldl(fun(E, A) -> <<A/binary, E/binary>> end, <<>>, NSL2),
+    NSList = binary:split(NS2, <<";">>, [global]),
+    lists:map(fun(Q) -> case query(Q) of
+                            ok -> ok;
+                            {[], []} -> ok
+                        end
+              end, NSList),
+    ok.
+
+-spec purge_device(devid()) -> ok | {error, atom()}.
+purge_device(DevId) ->
+    Q = "DROP TABLE device_" ++ binary_to_list(DevId),
     query(Q).
 
 -spec read_device(devid()) -> {devid(), binary(), binary(), map()} | undefined.
