@@ -17,15 +17,21 @@
 
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
-     errors, metrics, events, device].
+     errors, metrics, events, device, transaction].
 %%    [device].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
-    ok = file:make_dir("priv"),
-    {ok, _} = file:copy("../../lib/nts/priv/pg_device.sql", "priv/pg_device.sql"),
+    nts_helpers:get_priv_files(),
     C.
+
+end_per_testcase(device, _) ->
+    nts_db:delete_device(<<"0123">>),
+    nts_db:purge_device(<<"0123">>),
+    ok;
+end_per_testcase(_, _) ->
+    ok.
 
 end_per_suite(_Config) ->
     application:stop(nts).
@@ -172,8 +178,7 @@ device(_) ->
     ok = nts_db:update_device(<<"0123">>, #{cos => 99}),
     {_, _, _, Conf} = nts_db:read_device(<<"0123">>),
     ?assertEqual(99, maps:get(cos, Conf)),
-    {error, _} = nts_db:history(<<"0123">>),
-    nts_db:initialise_device(<<"0123">>),
+    nts_db:initialise_device(<<"0123">>), % already run, should be idempotent
     [] = nts_db:history(<<"0123">>),
     ok = nts_db:delete_device(<<"0123">>),
     undefined = nts_db:read_device(<<"0123">>),
@@ -181,6 +186,21 @@ device(_) ->
     nts_db:purge_device(<<"0123">>),
     {error, _} = nts_db:history(<<"0123">>),
     ok.
+
+transaction(_) ->
+    ?assertNot(nts_db:table_exists("transaction_test")),
+    nts_db:query("CREATE TABLE transaction_test (a int)"),
+    ?assert(nts_db:table_exists("transaction_test")),
+    nts_db:query("DROP TABLE transaction_test"),
+    ?assertNot(nts_db:table_exists("transaction_test")),
+    F = fun(Conn) ->
+            nts_db:query(Conn, "CREATE TABLE transaction_test (a int)"),
+            nts_db:query(Conn, "CREATE TABLE device (b int)")
+        end,
+    nts_db:transaction(F),
+    ?assertNot(nts_db:table_exists("transaction_test")),
+    ok.
+
 
 %%%%%%%%%%%%%%%%
 

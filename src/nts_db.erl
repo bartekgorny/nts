@@ -13,12 +13,14 @@
 
 %% API
 -export([query/1, history/1, history/3, save_loc/4]).
+-export([query/2, transaction/1]).
 -export([frames/3, save_frame/2, update_loc/4, update_state/2]).
 -export([full_history/3]).
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
 -export([save_event/1, event_log/4, delete_events/3, clear_events/2]).
 -export([create_device/3, read_device/1, update_device/2, delete_device/1]).
 -export([initialise_device/1, purge_device/1]).
+-export([table_exists/1]). % needed for tests
 
 
 query(Q) ->
@@ -41,6 +43,35 @@ query(Q) ->
         _ ->
             ok
     end,
+    nts_db_conn:free_connection(Conn),
+    Ret.
+
+query(Conn, Q) ->
+    log_query(Q),
+    nts_metrics:up([db, ops]),
+    Ret = case epgsql:squery(Conn, Q) of
+              {ok, Types, Values} -> {Types, Values};
+              {ok, 0} ->
+                  nts_metrics:up([db, failed_ops]),
+                  {error, op_failed};
+              {ok, _} -> ok;
+              {error, #error{codename = EName}} ->
+                  nts_metrics:up([db, failed_ops]),
+                  {error, EName}
+          end,
+    case Ret of
+        {error, E} ->
+            ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]),
+            throw(stop_that_transaction);
+        _ ->
+            ok
+    end,
+    nts_db_conn:free_connection(Conn),
+    Ret.
+
+transaction(F) ->
+    Conn = nts_db_conn:get_connection(),
+    Ret = epgsql:with_transaction(Conn, F),
     nts_db_conn:free_connection(Conn),
     Ret.
 
@@ -282,23 +313,40 @@ create_device(DevId, Type, Label) ->
         "," ++
         quote(Label) ++
         ", '{}')",
-    query(Q).
+    case query(Q) of
+        ok ->
+            initialise_device(DevId);
+        E ->
+            E
+    end.
 
 -spec initialise_device(devid()) -> ok | {error, atom()}.
 initialise_device(DevId) ->
-    {ok, S} = file:read_file("priv/pg_device.sql"),
     Nid = <<"device_", DevId/binary>>,
+    case table_exists(Nid) of
+        true -> ok;
+        false ->
+            case do_initialise_device(Nid) of
+                {rollback, Why} ->
+                    {error, {rollback, Why}};
+                _ -> ok
+            end
+    end.
+
+do_initialise_device(Nid) ->
+    {ok, S} = file:read_file("priv/pg_device.sql"),
     NS = binary:replace(S, <<"device_01">>, Nid, [global]),
     NSL1 = binary:split(NS, <<"\n">>, [global]),
     NSL2 = lists:filter(fun(Q) -> Q /= <<"">> andalso binary:part(Q, {0, 2}) /= <<"--">> end, NSL1),
     NS2 = lists:foldl(fun(E, A) -> <<A/binary, E/binary>> end, <<>>, NSL2),
     NSList = binary:split(NS2, <<";">>, [global]),
-    lists:map(fun(Q) -> case query(Q) of
-                            ok -> ok;
-                            {[], []} -> ok
-                        end
-              end, NSList),
-    ok.
+    transaction(fun(Conn) ->
+        lists:map(fun(Q) -> case query(Conn, Q) of
+                                ok -> ok;
+                                {[], []} -> ok
+                            end
+                  end, NSList)
+        end).
 
 -spec purge_device(devid()) -> ok | {error, atom()}.
 purge_device(DevId) ->
@@ -454,4 +502,14 @@ parse_event({BId, DevId, BDtm, BCoords, BType, BData}) ->
     #event{id = Id, device = DevId, dtm = Dtm, lat = Lat, lon = Lon, type = Type, data = Data}.
 
 
+table_exists(Tname) when is_binary(Tname) ->
+    table_exists(binary_to_list(Tname));
+table_exists(Tname) ->
+    Q = "SELECT * FROM pg_tables WHERE schemaname='public' AND tablename='" ++
+         Tname ++
+         "'",
+    case query(Q) of
+        {_, []} -> false;
+        _ -> true
+    end.
 

@@ -11,6 +11,7 @@
 
 %% API
 -export([clear_tables/1, set_config/1, change_config/2, make_filename/2]).
+-export([get_priv_files/0]).
 
 -include_lib("nts/src/nts.hrl").
 clear_tables([]) -> ok;
@@ -35,3 +36,8 @@ change_config(Config, Nf) ->
 make_filename(Config, F) ->
     DataDir = proplists:get_value(data_dir, Config),
     filename:join([DataDir, F]).
+
+get_priv_files() ->
+    file:make_dir("priv"),
+    file:copy("../../lib/nts/priv/pg_device.sql", "priv/pg_device.sql"),
+    ok.

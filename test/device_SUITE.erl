@@ -34,6 +34,7 @@ all() ->
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:change_config(C, "nts.cfg"),
+    nts_helpers:get_priv_files(),
     C.
 
 init_per_testcase(startstop_events, C) ->
