@@ -12,11 +12,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("nts/src/nts.hrl").
+-import(nts_helpers, [fromnow/1]).
 
 -compile(export_all).
 
 all() ->
     [stabiliser,
+     dateutil,
      mapper].
 
 
@@ -79,6 +81,17 @@ mapper(_) ->
     ?assertEqual({sensor_a, 5}, mod_mapping:map_sensor(input_a, 5, 4, SensorDefs, Conf1)),
     ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(input_a, 0, 4, SensorDefs, Conf1)),
     ?assertEqual({sensor_a, 4}, mod_mapping:map_sensor(input_a, undefined, 4, SensorDefs, Conf1)),
+    ok.
+
+dateutil(_) ->
+    ?assertClose(fromnow(0), fromnow(0)),
+    ?assertClose(fromnow(-9), fromnow(-8)),
+    ?assertClose(fromnow(-8), fromnow(-9)),
+    ?assertClose(fromnow(1), fromnow(2)),
+    ?assertClose(fromnow(2), fromnow(1)),
+    ?assertNotClose(fromnow(1), fromnow(-1)),
+    ?assertNotClose(fromnow(1), fromnow(3)),
+    ?assertNotClose(fromnow(3), fromnow(1)),
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

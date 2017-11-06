@@ -6,11 +6,11 @@ v get fresh loc on dev startup
 v save loc
 - eventologia
 v mappingi
-- reprocessing data
+- reprocessing data (also with failure)
 v deploying devices
 - changing mapping should reset device state and be stored in location so that we do same
   when reprocessing (otherwise old mapping result would stay there forever)
 - proc. heartbeats
 - proc. event frames
 - kalibracja
-- datetime "almost equal"
+v datetime "almost equal"

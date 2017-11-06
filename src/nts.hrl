@@ -55,3 +55,30 @@
 -define(METRICS_SPIRAL, [[db, ops],
                          [db, failed_ops]]
 ).
+
+-define(assertClose(DtmA, DtmB),
+    begin
+        case nts_helpers:compare_near_dates(DtmA, DtmB) of
+            true -> ok;
+            false ->
+                erlang:error({assertClose,
+                              [{module, ?MODULE},
+                               {line, ?LINE},
+                               {date_a, DtmA},
+                               {date_b, DtmB}]})
+        end
+    end).
+
+-define(assertNotClose(DtmA, DtmB),
+    begin
+        case nts_helpers:compare_near_dates(neg, DtmA, DtmB) of
+            true -> ok;
+            false ->
+                erlang:error({assertNotClose,
+                              [{module, ?MODULE},
+                               {line, ?LINE},
+                               {date_a, DtmA},
+                               {date_b, DtmB}]})
+        end
+    end).
+

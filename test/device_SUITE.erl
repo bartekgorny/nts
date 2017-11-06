@@ -16,6 +16,8 @@
 -compile(export_all).
 -define(DEVID, <<"01">>).
 
+-import(nts_helpers, [fromnow/1]).
+
 all() ->
     [
         simple_test,
@@ -73,7 +75,8 @@ simple_test(_) ->
     Dtm = fromnow(-20),
     S = nts_device:getstate(Dev),
     D = maps:get(status, S#loc.data),
-    ?assertMatch(#{last_signal := RecDtm, last_signal_dtm := Dtm }, D),
+    ?assertClose(RecDtm, maps:get(last_signal, D)),
+    ?assertClose(Dtm, maps:get(last_signal_dtm, D)),
     ?assertMatch({10, 20}, nts_location:coords(S)),
     has_error(false, Dev),
     nts_device:process_frame(Dev, mkframe(-8, -16)),
@@ -83,7 +86,8 @@ simple_test(_) ->
     Dtm2 = fromnow(-16),
     S2 = nts_device:getstate(Dev),
     D2 = maps:get(status, S2#loc.data),
-    ?assertMatch(#{last_signal := RecDtm2, last_signal_dtm := Dtm2 }, D2),
+    ?assertClose(RecDtm2, maps:get(last_signal, D2)),
+    ?assertClose(Dtm2, maps:get(last_signal_dtm, D2)),
     has_error(true, Dev),
     nts_device:process_frame(Dev, mkframe(-7, -14)),
     check_coords({7, 14}, Dev),
@@ -91,7 +95,8 @@ simple_test(_) ->
     Dtm3 = fromnow(-14),
     S3 = nts_device:getstate(Dev),
     D3 = maps:get(status, S3#loc.data),
-    ?assertMatch(#{last_signal := RecDtm3, last_signal_dtm := Dtm3 }, D3),
+    ?assertClose(RecDtm3, maps:get(last_signal, D3)),
+    ?assertClose(Dtm3, maps:get(last_signal_dtm, D3)),
     has_error(false, Dev),
     ok.
 
@@ -151,13 +156,13 @@ startstop_events(_) ->
     timer:sleep(1000),
     Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(0)),
     [E0, E1] = Res,
-    ?assertEqual(Now0, E0#event.dtm),
-    ?assertEqual(Now1, E1#event.dtm),
+    ?assertClose(Now0, E0#event.dtm),
+    ?assertClose(Now1, E1#event.dtm),
     % filter out current state
     FlushRes = [{EType, E} || {EType, #event{} = E} <- event_listener:flush()],
     [{P0Type, P0}, {P1Type, P1}] = FlushRes,
-    ?assertEqual(Now0, P0#event.dtm),
-    ?assertEqual(Now1, P1#event.dtm),
+    ?assertClose(Now0, P0#event.dtm),
+    ?assertClose(Now1, P1#event.dtm),
     ?assertEqual([device, activity, up], P0Type),
     ?assertEqual([device, activity, down], P1Type),
     ok.
@@ -241,15 +246,15 @@ state_recording(_) ->
     Dtm = fromnow(-20),
     LastLoc = nts_db:last_loc(?DEVID),
     ?assertMatch({10, 20}, nts_location:coords(LastLoc)),
-    ?assertEqual(RecDtm,
+    ?assertClose(RecDtm,
         nts_utils:bin2time(nts_location:get(status, last_signal, LastLoc))),
-    ?assertEqual(Dtm,
+    ?assertClose(Dtm,
         nts_utils:bin2time(nts_location:get(status, last_signal_dtm, LastLoc))),
     CurLoc = nts_db:current_state(?DEVID),
     ?assertMatch({10, 20}, nts_location:coords(CurLoc)),
-    ?assertEqual(RecDtm,
+    ?assertClose(RecDtm,
         nts_utils:bin2time(nts_location:get(status, last_signal, CurLoc))),
-    ?assertEqual(Dtm,
+    ?assertClose(Dtm,
         nts_utils:bin2time(nts_location:get(status, last_signal_dtm, CurLoc))),
     ?assertEqual(true, nts_location:get(status, up, CurLoc)),
     nts_device:stop(Dev),
@@ -297,7 +302,7 @@ sensor_events(_) ->
     Res = nts_db:event_log(?DEVID, [device, sensorchange, ignition],
                            fromnow(-20), fromnow(0)),
     [Eon, Eoff] = Res,
-    ?assertEqual(Dtm1, Eon#event.dtm),
+    ?assertClose(Dtm1, Eon#event.dtm),
     ?assertEqual(1, maps:get(value, Eon#event.data)),
     ?assertEqual(Dtm2, Eoff#event.dtm),
     ?assertEqual(0, maps:get(value, Eoff#event.data)),
@@ -340,11 +345,6 @@ check_sensors(Dev, Exp) ->
     Loc = nts_device:getstate(Dev),
     lists:map(fun({K, V}) -> ?assertEqual(V, nts_location:get(sensor, K, Loc)) end,
         maps:to_list(Exp)).
-
-fromnow(Offset) ->
-    N = os:timestamp(),
-    Sec = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(N)) + Offset,
-    calendar:gregorian_seconds_to_datetime(Sec).
 
 mkframe(RecOffset, Offset) ->
     mkframe(RecOffset, Offset, #{}).

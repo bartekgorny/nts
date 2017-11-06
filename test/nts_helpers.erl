@@ -11,8 +11,10 @@
 
 %% API
 -export([clear_tables/1, set_config/1, change_config/2, make_filename/2]).
--export([get_priv_files/0]).
+-export([get_priv_files/0, fromnow/1]).
+-export([compare_near_dates/2, compare_near_dates/3]).
 
+-include_lib("eunit/include/eunit.hrl").
 -include_lib("nts/src/nts.hrl").
 clear_tables([]) -> ok;
 clear_tables([T|Rest]) ->
@@ -41,3 +43,20 @@ get_priv_files() ->
     file:make_dir("priv"),
     file:copy("../../lib/nts/priv/pg_device.sql", "priv/pg_device.sql"),
     ok.
+
+fromnow(Offset) ->
+    N = os:timestamp(),
+    Sec = calendar:datetime_to_gregorian_seconds(calendar:now_to_datetime(N)) + Offset,
+    calendar:gregorian_seconds_to_datetime(Sec).
+
+compare_near_dates(A, B) ->
+    SA = calendar:datetime_to_gregorian_seconds(A),
+    SB = calendar:datetime_to_gregorian_seconds(B),
+    Dif = abs(SA - SB),
+    Dif < 2.
+
+compare_near_dates(neg, A, B) ->
+    SA = calendar:datetime_to_gregorian_seconds(A),
+    SB = calendar:datetime_to_gregorian_seconds(B),
+    Dif = abs(SA - SB),
+    Dif > 1.
