@@ -131,7 +131,9 @@ failure(_) ->
     nts_device:process_frame(Dev, mkframe(-9, -18)),
     process_flag(trap_exit, true),
     try nts_device:process_frame(Dev, mkframe(-1, -2))
-    catch _:_ -> ok end,
+    catch exit:E ->
+        ?assertMatch({error_saving_data, _}, E)
+    end,
     process_flag(trap_exit, false),
     ?assertExit({noproc, _}, sys:get_state(Dev)),
     ok.

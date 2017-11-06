@@ -7,9 +7,10 @@ v save loc
 - eventologia
 v mappingi
 - reprocessing data
-- deploying devices
+v deploying devices
 - changing mapping should reset device state and be stored in location so that we do same
   when reprocessing (otherwise old mapping result would stay there forever)
 - proc. heartbeats
 - proc. event frames
 - kalibracja
+- datetime "almost equal"
