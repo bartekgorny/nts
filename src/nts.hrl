@@ -11,9 +11,9 @@
 -type devid() :: binary().
 -type datetime() :: calendar:datetime().
 
--record(loc, {id = 0, dtm, lat = 0.0, lon = 0.0, data = #{}}).
+-record(loc, {id = 0, dtm, lat = 0.0, lon = 0.0, data = #{}, flags = #{}}).
 -type loc() :: #loc{id :: integer(), dtm :: datetime() | undefined, lat :: float(),
-                    lon :: float(), data :: map()}.
+                    lon :: float(), data :: map(), flags :: map()}.
 
 %% data in location is a map which has three possible keys
 -type datapart() :: logistic | status | sensor.

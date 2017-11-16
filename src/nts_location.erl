@@ -13,6 +13,7 @@
 %% API
 -export([new/0]).
 -export([id/1, dtm/1, dtm/2, coords/1, coords/3, get/3, set/4, remove/3]).
+-export([flag/3]).
 
 -spec new() -> loc().
 new() -> #loc{}.
@@ -62,6 +63,13 @@ remove(sensor, Key, Loc) ->
     remove_data(sensor, Key, Loc);
 remove(_, _, _) ->
     {error, invalid_section}.
+
+flag(get, Key, Loc) ->
+    maps:is_key(Key, Loc#loc.flags);
+flag(set, Key, Loc) ->
+    Loc#loc{flags = maps:put(Key, true, Loc#loc.flags)};
+flag(unset, Key, Loc) ->
+    Loc#loc{flags = maps:remove(Key, Loc#loc.flags)}.
 
 get_data(Part, Key, Loc) ->
     Data = Loc#loc.data,
