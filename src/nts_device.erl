@@ -139,7 +139,7 @@ normal(event_timeout, idle, _State) ->
     {stop, idle_timeout};
 normal({call, From}, #frame{} = Frame, State) ->
     % here we handle fresh frame from a device
-    case do_process_frame(Frame, State) of
+    case do_process_frame(new, Frame, State) of
         {exit, E} ->
             {stop, E};
         NewState ->
@@ -200,18 +200,6 @@ set_timestamps(Frame, NewLoc) ->
             NewLoc2#loc{dtm = Dtm}
     end.
 
-%% @doc we do it once, after receiving frame, using either new location (before saving in case
-%% it crashes), or old one if loc processing errored out
-maybe_emit_device_up(_, #state{up = true} = State) ->
-    State;
-maybe_emit_device_up(Loc, State) ->
-    Evt = nts_event:create_event([device, activity, up],
-                                 State#state.devid,
-                                 Loc,
-                                 nts_utils:dtm()),
-    process_events([save, publish], [Evt]),
-    State#state{up = true}.
-
 maybe_emit_device_down(#state{up = false} = State) ->
     State;
 maybe_emit_device_down(State) ->
@@ -237,7 +225,12 @@ update_current_down(DevId, Loc) ->
     end,
     ok.
 
-flush_events(Tasks, Internal) ->
+flush_events(new, Internal) ->
+    flush_events([save, publish], Internal);
+flush_events(reproc, Internal) ->
+    flush_events([save], Internal);
+
+flush_events(Tasks, Internal) when is_list(Tasks) ->
     process_events(Tasks, maps:get(new_events, Internal, [])),
     maps:remove(new_events, Internal).
 
@@ -255,7 +248,15 @@ process_events(publish, Q) ->
               end,
               Q).
 
-do_process_frame(Frame, State) ->
+-spec do_process_frame(new | reproc, frame(), state()) -> state() | {error, atom()}.
+do_process_frame(Origin, Frame, State) ->
+    do_process_frame(Origin, undefined, Frame, State).
+
+%% in reprocessing, OrigLoc is the one we got from dbase and may modify
+%% for new loc it is undefined
+-spec do_process_frame(new | reproc, loc() | undefined, frame(), state()) ->
+    state() | {error, atom()}.
+do_process_frame(Origin, OrigLoc, Frame, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Frame, nts_location:new()),
@@ -271,22 +272,22 @@ do_process_frame(Frame, State) ->
             % mark location as errored so that this info is published
             Es = nts_utils:format_error(E),
             NewLocation = nts_location:set(status, error, Es, OldLocation),
-            NewLocation0 = nts_location:set(status, up, true, NewLocation),
+            NewLocation0 = maybe_set_status_up(Origin, OrigLoc, NewLocation),
             % update timestamps, leave the rest unchanged
             NewLocation1 = set_timestamps(Frame, NewLocation0),
             % do not change internal state as it might be corrupt
             NewState0 = State#state{loc = NewLocation1},
-            NewState = maybe_emit_device_up(OldLocation, NewState0),
+            NewState = maybe_emit_device_up(Origin, OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                 Frame, State#state.internaldata]),
-            nts_hooks:run(publish_state, [], [State#state.devid, NewLocation1]),
+            maybe_publish_state(Origin, State#state.devid, NewLocation1),
             NewState;
         {NewLocation0, NewInternal} ->
-            NewLocation = nts_location:set(status, up, true, NewLocation0),
-            NewState0 = maybe_emit_device_up(NewLocation, State),
-            % save and publish events created by handlers
-            NewInternal1 = flush_events([save, publish], NewInternal),
+            NewLocation = maybe_set_status_up(Origin, OrigLoc, NewLocation0),
+            NewState0 = maybe_emit_device_up(Origin, NewLocation, State),
+            % save and possibly publish events created by handlers
+            NewInternal1 = flush_events(Origin, NewInternal),
             % save frame and location and publish state
             case nts_hooks:run(save_state, [],
                                [NewState0#state.devid, NewLocation,
@@ -295,10 +296,36 @@ do_process_frame(Frame, State) ->
                     {exit, error_saving_data};
                 _ ->
                     NewState = NewState0#state{loc = NewLocation, internaldata = NewInternal1},
-                    nts_hooks:run(publish_state, [], [State#state.devid, NewLocation]),
+                    maybe_publish_state(Origin, State#state.devid, NewLocation),
                     NewState
             end
     end.
+
+%% If it is new loc, up is true, for sure
+%% if reprocess we preserve status as previously written
+maybe_set_status_up(new, _OrigLoc, Location) ->
+    nts_location:set(status, up, true, Location);
+maybe_set_status_up(reproc, OrigLoc, Location) ->
+    nts_location:set(status, up, get_up_status(OrigLoc), Location).
+
+maybe_publish_state(new, DevId, Loc) ->
+    nts_hooks:run(publish_state, [], [DevId, Loc]);
+maybe_publish_state(_, _, _) ->
+    ok.
+
+%% @doc we do it once, after receiving frame, using either new location (before saving in case
+%% it crashes), or old one if loc processing errored out
+maybe_emit_device_up(_, _, #state{up = true} = State) ->
+    State;
+maybe_emit_device_up(reproc, _, State) ->
+    State;
+maybe_emit_device_up(new, Loc, State) ->
+    Evt = nts_event:create_event([device, activity, up],
+        State#state.devid,
+        Loc,
+        nts_utils:dtm()),
+    process_events([save, publish], [Evt]),
+    State#state{up = true}.
 
 do_reprocess_data(FromDtm, State) ->
     DevId = devid(State),
@@ -313,49 +340,7 @@ do_reprocess_data(FromDtm, State) ->
 
 reprocess_record({Fr, Loc}, State) ->
     Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data, Fr#frame.received),
-    do_reprocess_frame(Loc, Frame, State).
-
-do_reprocess_frame(Loc, Frame, State) ->
-    % clear previous error
-    OldLocation = nts_location:remove(status, error, State#state.loc),
-    NewLoc = set_timestamps(Frame, nts_location:new()),
-    case nts_hooks:run_procloc(State#state.device_type,
-                               Frame#frame.type,
-                               Frame,
-                               OldLocation,
-                               NewLoc,
-                               State#state.internaldata,
-                               State) of
-        {error, E} ->
-            % it has already been logged
-            % mark location as errored so that this info is published
-            Es = nts_utils:format_error(E),
-            NewLocation0 = nts_location:set(status, error, Es, OldLocation),
-            % do not change activity status
-            NewLocation = nts_location:set(status, up, get_up_status(Loc), NewLocation0),
-            % update timestamps, leave the rest unchanged
-            NewLocation1 = set_timestamps(Frame, NewLocation),
-            % do not change internal state as it might be corrupt
-            NewState = State#state{loc = NewLocation1},
-            % save recalculated location
-            nts_hooks:run(save_state, [], [State#state.devid, NewLocation1,
-                          Frame, State#state.internaldata]),
-            NewState;
-        {NewLocation0, NewInternal} ->
-            % do not change activity status
-            NewLocation = nts_location:set(status, up, get_up_status(Loc), NewLocation0),
-            % save and publish events created by handlers
-            NewInternal1 = flush_events([save], NewInternal),
-            % save frame and location
-            case nts_hooks:run(save_state, [],
-                               [State#state.devid, NewLocation,
-                                Frame, NewInternal1]) of
-                {error, _} ->
-                    exit(self(), error_saving_data);
-                _ ->
-                    State#state{loc = NewLocation, internaldata = NewInternal1}
-            end
-    end.
+    do_process_frame(reproc, Loc, Frame, State).
 
 get_up_status(Loc) ->
     case nts_location:get(status, up, Loc) of

@@ -392,7 +392,7 @@ prepare_frame(#frame{hex = true} = Frame) ->
 to_json(Data) ->
     binary_to_list(nts_utils:json_encode_map(Data)).
 
-parse_device({_, DevId, Type, Label, BConfig}) ->
+parse_device({_, _, DevId, Type, Label, BConfig}) ->
     {DevId, binary_to_existing_atom(Type, utf8),
      Label, nts_utils:json_decode_map(BConfig)}.
 

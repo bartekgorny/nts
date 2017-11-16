@@ -14,3 +14,7 @@ v deploying devices
 - proc. event frames
 - kalibracja
 v datetime "almost equal"
+- location processing module can return a no-op, we have to save current data but defer
+  publishing until it returns a list of locations, and same in reprocessing, ouch
+  exemplum: mod_floatfilter
+v refactor reprocessing to bring it closer to the main impl, otherwise I'll get nuts

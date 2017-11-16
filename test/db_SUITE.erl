@@ -24,6 +24,7 @@ init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
     nts_helpers:get_priv_files(),
+    nts_db:initialise_device(?DEVID),
     C.
 
 end_per_testcase(device, _) ->
