@@ -18,6 +18,7 @@
 
 -export([get_brackets/3, ew_table/0]).
 -export([timediff/2]).
+-export([insort/2]).
 
 -export([test/0]).
 
@@ -137,7 +138,17 @@ keys_to_atoms(M) when is_map(M) ->
     );
 keys_to_atoms(M) ->
     M.
-    
+
+insort(Obj, Lista) ->
+    insort(Obj, [], Lista).
+
+insort(Obj, Smaller, []) ->
+    Smaller ++ [Obj];
+insort(Obj, Smaller, [H|T]) when Obj > H ->
+    insort(Obj, Smaller ++ [H], T);
+insort(Obj, Smaller, T) ->
+    Smaller ++ [Obj] ++ T.
+
 test() ->
     M = #{flat => dtm(), what => "a", nested => #{rien => 123, d => dtm()}},
     io:format("M:~n~p~n~n", [M]),

@@ -19,6 +19,7 @@
 all() ->
     [stabiliser,
      dateutil,
+     utilities,
      mapper].
 
 
@@ -92,6 +93,19 @@ dateutil(_) ->
     ?assertNotClose(fromnow(1), fromnow(-1)),
     ?assertNotClose(fromnow(1), fromnow(3)),
     ?assertNotClose(fromnow(3), fromnow(1)),
+    ok.
+
+utilities(_) ->
+    % insort
+    Lst = [{10, z}, {20, a}],
+    Lst1 = nts_utils:insort({5, 234}, Lst),
+    ?assertEqual([{5, 234}, {10, z}, {20, a}], Lst1),
+    Lst2 = nts_utils:insort({15, 23}, Lst1),
+    ?assertEqual([{5, 234}, {10, z}, {15, 23}, {20, a}], Lst2),
+    Lst3 = nts_utils:insort({25, 32}, Lst2),
+    ?assertEqual([{5, 234}, {10, z}, {15, 23}, {20, a}, {25, 32}], Lst3),
+    Lst4 = nts_utils:insort({1, a}, []),
+    ?assertEqual([{1, a}], Lst4),
     ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
