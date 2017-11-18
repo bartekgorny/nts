@@ -10,6 +10,9 @@
 -author("bartek").
 -include_lib("nts/src/nts.hrl").
 
+%%% this logic should be applied in the preprocessing state, BEFORE floatfilter, so that it does
+%%% not treat GPS jumps as device movement!
+
 %% API
 -export([filter_loc/3]).
 
@@ -82,6 +85,7 @@ speed_check(checking, NewLoc, #state{last_good = LastGood} = State) ->
             case length(Trail) of
                 ?STABLE_TRAIL_LEN ->
                     % we received a few good locations, maybe gps is right anyway
+                    % (rather rare case, I think)
                     {NewLoc, State#state{state = normal,
                                          last_good = NewLoc,
                                          trail = []}};

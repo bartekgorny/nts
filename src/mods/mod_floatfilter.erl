@@ -62,7 +62,7 @@ next(ReferencePos, NewPos, Data) -> ok.
 %%   - stores orig. data in a queue
 %%   - returns it for further processing
 %% - when state becomes known then
-%%   - fixes data in the queue
+%%   - fixes data in the queue (incl. status so that we can generate events like 'started moving')
 %%   - flags them as 'update'
 %%   - returns the whole queue plus the most recent one, not flagged
 %%
