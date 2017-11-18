@@ -67,9 +67,7 @@ remove(_, _, _) ->
 flag(get, Key, Loc) ->
     maps:is_key(Key, Loc#loc.flags);
 flag(set, Key, Loc) ->
-    Loc#loc{flags = maps:put(Key, true, Loc#loc.flags)};
-flag(unset, Key, Loc) ->
-    Loc#loc{flags = maps:remove(Key, Loc#loc.flags)}.
+    Loc#loc{flags = maps:put(Key, true, Loc#loc.flags)}.
 
 get_data(Part, Key, Loc) ->
     Data = Loc#loc.data,

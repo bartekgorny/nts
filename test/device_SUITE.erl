@@ -39,27 +39,33 @@ init_per_suite(C) ->
     nts_helpers:get_priv_files(),
     C.
 
-init_per_testcase(startstop_events, C) ->
-    init_per_testcase(generic, C);
-init_per_testcase(reprocessing, C) ->
-    init_per_testcase(generic, C);
-init_per_testcase(_, C) ->
+init_per_testcase(CaseName, C) ->
     nts_helpers:clear_tables(["device", "device_01", "events", "current"]),
     event_listener:start_link(),
+    add_handlers(CaseName),
     C.
 
-end_per_testcase(_, _) ->
+end_per_testcase(CaseName, _) ->
     event_listener:flush(),
     case global:whereis_name(?DEVID) of
         undefined -> ok;
         Dev ->
             nts_device:stop(Dev)
     end,
+    remove_handlers(CaseName),
     ok.
 
 end_per_suite(_Config) ->
     application:stop(nts).
 
+handlers_for_testcase(simple_test) ->
+    [{procloc, {generic, device_SUITE, handler_maybe_error, 30}}];
+handlers_for_testcase(failure) ->
+    [{save_state, {device_SUITE, maybe_crash_while_saving, 30}}];
+handlers_for_testcase(internal_state) ->
+    [{procloc, {generic, device_SUITE, handler_trail, 25}}];
+handlers_for_testcase(_) ->
+    [].
 
 %%%===================================================================
 %%% tests
@@ -432,3 +438,10 @@ compare_eh([A|Atail], [B|Btail]) ->
     compare_event(A, B),
     compare_eh(Atail, Btail).
 
+add_handlers(Case) ->
+    Handlers = handlers_for_testcase(Case),
+    lists:map(fun nts_helpers:add_handler/1, Handlers).
+
+remove_handlers(Case) ->
+    Handlers = handlers_for_testcase(Case),
+    lists:map(fun nts_helpers:remove_handler/1, Handlers).

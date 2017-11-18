@@ -13,7 +13,7 @@
 -export([clear_tables/1, set_config/1, change_config/2, make_filename/2]).
 -export([get_priv_files/0, fromnow/1]).
 -export([compare_near_dates/2, compare_near_dates/3]).
--export([add_handler/2, remove_handler/2]).
+-export([add_handler/1, remove_handler/1, add_handler/2, remove_handler/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("nts/src/nts.hrl").
@@ -63,7 +63,13 @@ compare_near_dates(neg, A, B) ->
     Dif > 1.
 
 add_handler(Hook, Handler) ->
+    add_handler({Hook, Handler}).
+
+add_handler({Hook, Handler}) ->
     nts_hooks:insert_handler(Hook, Handler).
 
 remove_handler(Hook, Handler) ->
+    remove_handler({Hook, Handler}).
+
+remove_handler({Hook, Handler}) ->
     nts_hooks:remove_handler(Hook, Handler).
