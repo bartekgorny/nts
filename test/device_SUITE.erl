@@ -30,7 +30,8 @@ all() ->
         state_recording,
         config,
         sensor_events,
-        reprocessing
+        reprocessing,
+        twostage
     ].
 
 init_per_suite(C) ->
@@ -341,6 +342,13 @@ reprocessing(_) ->
     compare_loc(CurLoc3, nts_db:last_loc(?DEVID)),
     % there should be only one event: new current state after reprocessing
     [{current_state, ?DEVID}] = event_listener:flush(),
+    ok.
+
+twostage(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    ok = nts_db:update_device(?DEVID, #{cos => 99}),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
     ok.
 
 %%%===================================================================

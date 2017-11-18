@@ -257,6 +257,7 @@ do_process_frame(Origin, Frame, State) ->
 -spec do_process_frame(new | reproc, loc() | undefined, frame(), state()) ->
     state() | {error, atom()}.
 do_process_frame(Origin, OrigLoc, Frame, State) ->
+    nts_hooks:run(preprocess, [], []),
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Frame, nts_location:new()),
