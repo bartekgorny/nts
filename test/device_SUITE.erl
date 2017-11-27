@@ -20,18 +20,18 @@
 
 all() ->
     [
-        simple_test,
-        internal_state,
-        failure,
-        startstop_events,
-        idle_timeout,
-        mapping,
-        mapping_custom,
-        state_recording,
-        config,
-        sensor_events,
-        reprocessing,
-        twostage
+%%        simple_test,
+%%        internal_state,
+%%        failure,
+%%        startstop_events,
+%%        idle_timeout,
+%%        mapping,
+%%        mapping_custom,
+%%        state_recording,
+%%        config,
+%%        sensor_events,
+%%        reprocessing,
+        stabiliser
     ].
 
 init_per_suite(C) ->
@@ -65,6 +65,8 @@ handlers_for_testcase(failure) ->
     [{save_state, {device_SUITE, maybe_crash_while_saving, 30}}];
 handlers_for_testcase(internal_state) ->
     [{procloc, {generic, device_SUITE, handler_trail, 25}}];
+handlers_for_testcase(stabiliser) ->
+    [{procloc, {generic, mod_stabiliser, 25}}];
 handlers_for_testcase(_) ->
     [].
 
@@ -344,11 +346,14 @@ reprocessing(_) ->
     [{current_state, ?DEVID}] = event_listener:flush(),
     ok.
 
-twostage(_) ->
+stabiliser(_) ->
+    % just to see it works, details are tested in toolset_SUITE
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
-    ok = nts_db:update_device(?DEVID, #{cos => 99}),
     {ok, Dev} = nts_device:start_link(?DEVID),
-    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    send_and_check(Dev, ?DEVID, -10, {1, 1}, {1, 1}),
+    send_and_check(Dev, ?DEVID, -8, {1.0001, 1.0001}, {1.0001, 1.0001}),
+    send_and_check(Dev, ?DEVID, -6, {2, 2}, {1.0001, 1.0001}),
+    send_and_check(Dev, ?DEVID, -4, {1.0002, 1.0002}, {1.0002, 1.0002}),
     ok.
 
 %%%===================================================================
@@ -360,6 +365,20 @@ check_sensors(Dev, Exp) ->
     lists:map(fun({K, V}) -> ?assertEqual(V, nts_location:get(sensor, K, Loc)) end,
         maps:to_list(Exp)).
 
+mkframe(Offset, {Lat, Lon}) ->
+    mkframe(Offset, {10, Lat, Lon});
+mkframe(Offset, {Sat, Lat, Lon}) ->
+    Values = #{devid => ?DEVID,
+               dtm => fromnow(Offset),
+               latitude => Lat,
+               longitude => Lon,
+               sat => Sat,
+               type => <<"location">>},
+    #frame{type = location,
+           device = ?DEVID,
+           received = fromnow(Offset),
+           values = Values,
+           data = nts_utils:json_encode_map(Values)};
 mkframe(RecOffset, Offset) ->
     mkframe(RecOffset, Offset, #{}).
 
@@ -453,3 +472,8 @@ add_handlers(Case) ->
 remove_handlers(Case) ->
     Handlers = handlers_for_testcase(Case),
     lists:map(fun nts_helpers:remove_handler/1, Handlers).
+
+send_and_check(Dev, DevId, Offset, Loc, Exp) ->
+    nts_device:process_frame(Dev, mkframe(Offset, Loc)),
+    Res = nts_location:coords(nts_db:current_state(DevId)),
+    ?assertEqual(Exp, Res).

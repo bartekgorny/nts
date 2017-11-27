@@ -128,6 +128,8 @@ cookmap({{_, _, _}, {_, _, _}} = D) ->
     time2bin(D);
 cookmap(M) when is_map(M) ->
     maps:map(fun(_, V) -> cookmap(V) end, M);
+cookmap(M) when is_list(M) ->
+    lists:map(fun cookmap/1, M);
 cookmap(M) ->
     M.
 
