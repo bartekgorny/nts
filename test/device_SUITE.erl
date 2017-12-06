@@ -20,17 +20,17 @@
 
 all() ->
     [
-%%        simple_test,
-%%        internal_state,
-%%        failure,
-%%        startstop_events,
-%%        idle_timeout,
-%%        mapping,
-%%        mapping_custom,
-%%        state_recording,
-%%        config,
-%%        sensor_events,
-%%        reprocessing,
+        simple_test,
+        internal_state,
+        failure,
+        startstop_events,
+        idle_timeout,
+        mapping,
+        mapping_custom,
+        state_recording,
+        config,
+        sensor_events,
+        reprocessing,
         stabiliser
     ].
 

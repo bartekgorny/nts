@@ -112,20 +112,19 @@ utilities(_) ->
 
 apply_and_check(Defs, Exp) ->
     {Last, _} = apply_defs(Defs),
-    {Dtm, _, Lon} = Last,
+    #{dtm := Dtm, lon := Lon} = Last,
     {_, {_, _, Sec}} = Dtm,
     Offset = 10000 * (Lon - 1),
     ?assertEqual(Exp, {Sec, round(Offset)}).
 
 apply_defs(Defs) ->
     Locs = loc_gen(Defs),
-    {FirstLoc, FirstSat} = hd(Locs),
-    {First, State} = mod_stabiliser:filter_loc(FirstLoc, FirstSat, undefined),
-    lists:foldl(fun filter_loc/2, {First, State}, tl(Locs)).
+    FirstLoc = hd(Locs),
+    {FirstRes, State} = mod_stabiliser:filter_loc(FirstLoc, maps:get(sat, FirstLoc), undefined),
+    lists:foldl(fun filter_loc/2, {FirstRes, State}, tl(Locs)).
 
-filter_loc({Loc, Sat}, {_, State}) ->
-    ct:pal("{Loc, Sat, State}: ~p", [{Loc, Sat, State}]),
-    mod_stabiliser:filter_loc(Loc, Sat, State).
+filter_loc(Loc, {_, State}) ->
+    mod_stabiliser:filter_loc(Loc, maps:get(sat, Loc), State).
 
 
 loc_gen(Defs) ->
@@ -140,6 +139,6 @@ loc_gen([H|T], Acc) ->
 loc({Time, Offset}) ->
     loc({Time, Offset, 8});
 loc({Time, Offset, Sat}) ->
-    {{{{2017, 9, 12}, {5, 14, Time}},
-      1, 1 + Offset / 10000},
-     Sat}.
+    #{dtm => {{2017, 9, 12}, {5, 14, Time}},
+      lat =>1, lon => 1 + Offset / 10000,
+      sat => Sat}.
