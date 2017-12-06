@@ -10,7 +10,95 @@
 -author("bartek").
 -include_lib("nts/src/nts.hrl").
 %% API
--export([]).
+-export([handle_input/6]).
+
+-define(MOVE_DISTANCE, 0.1).
+-define(TRAIL_LEN, 5).
+
+
+%% test API
+-export([check_moving/2, newstate/0]).
+
+-type floatmode() :: moving | uncertain | stopped.
+
+-record(floatstate, {refloc, mode = moving, trail = []}).
+-type floatstate() :: #floatstate{refloc :: loc(),
+                                  mode :: floatmode(),
+                                  trail :: [loc()]}.
+
+-spec handle_input(frametype(), frame(), loc(), loc(), internal(),
+                   nts_device:state()) ->
+    {ok, loc(), internal()}.
+handle_input(location, _Frame, _OldLoc, NewLoc, Internal, _State) ->
+    {ok, nts_location:set(status, up, true, NewLoc), Internal}.
+
+newstate() -> #floatstate{}.
+
+%% @doc Receives new location and floatfilter state; returns fixed location (meaning it may have
+%% its coordinates reset to those of the reference location) and modified state.
+-spec check_moving(loc(), floatstate()) -> {loc(), floatstate()}.
+check_moving(NewLoc, #floatstate{refloc = undefined} = FState) ->
+    {NewLoc, FState#floatstate{refloc = NewLoc}};
+check_moving(NewLoc, FState) ->
+    IsMove = is_move(NewLoc, FState#floatstate.refloc),
+    {NewMode, FixedLoc, NewState} = check_moving(FState#floatstate.mode, IsMove,
+                                                 FState#floatstate.trail,
+                                                 NewLoc, FState), % duplication for greater readability
+    {FixedLoc, NewState#floatstate{mode = NewMode}}.
+
+-spec check_moving(Mode :: floatmode(),
+                   IsMove :: boolean(),
+                   Trail :: [loc()],
+                   NewLoc :: loc(),
+                   FState :: floatstate()) ->
+    {floatmode(), loc(), floatstate()}.
+check_moving(moving, true, [], NewLoc, FState) ->
+    {moving, NewLoc, FState#floatstate{refloc = NewLoc}};
+check_moving(moving, false, [], NewLoc, FState) ->
+    {uncertain, set_to_ref(NewLoc, FState), add_to_trail(NewLoc, FState)};
+check_moving(uncertain, true, _Trail, NewLoc, FState) ->
+    % turns out we are moving
+    % re-save locations from Trail (they were saved with coords set to ref)
+    {moving, NewLoc, FState#floatstate{trail = []}};
+check_moving(uncertain, false, Trail, NewLoc, FState) ->
+    case length(Trail) of
+        ?TRAIL_LEN ->
+            {stopped, set_to_ref(NewLoc, FState), FState#floatstate{trail = []}};
+        _ ->
+            {uncertain, set_to_ref(NewLoc, FState), add_to_trail(NewLoc, FState)}
+    end;
+check_moving(stopped, false, [], NewLoc, FState) ->
+    {stopped, set_to_ref(NewLoc, FState), FState};
+check_moving(stopped, true, [], NewLoc, FState) ->
+    %% if needed we could add some logic to make sure he left for good (meaning: enter another
+    %% state and collect some trail before changing to `moving`)
+    {moving, NewLoc, FState};
+check_moving(_, _, _, NewLoc, FState) ->
+    % catch-all - reset state
+    ?WARNING_MSG("no previous match, resetting state, ~p", {NewLoc, FState}),
+    {moving, NewLoc, #floatstate{}}.
+
+is_move(A, B) ->
+    nts_utils:distance({A, B}) > ?MOVE_DISTANCE.
+
+%% set location coords to those of reference location
+set_to_ref(Loc, #floatstate{refloc = Ref}) ->
+    {Lat, Lon} = nts_location:coords(Ref),
+    nts_location:coords(Lat, Lon, Loc).
+
+add_to_trail(Loc, FState) ->
+    Trail = FState#floatstate.trail,
+    FState#floatstate{trail = [Loc | Trail]}.
+
+%%check_moving(New, Prev, Trail) ->
+%%    Moved = is_move(New, Prev),
+%%    check_moving(Moved, New, Prev, Trail).
+%%
+%%check_moving(true, New, _Prev, []) ->
+%%    {New, []};
+%%check_moving(false, New, Prev, []) ->
+%%    {Prev, [New]};
+
 %%"""
 %%        Filter out records if the device was not moving.
 %%        Definition of "not moving" is the following:
@@ -20,6 +108,7 @@
 %%                - start point - any point on the route
 %%                - period of time - number of signals or time in seconds, or both\
 %%                (if both we `and` both conditions)
+%%     fix: only time, signals are stupid
 %%        Filter Location objects or dicts which are cast into Locations
 %%    """
 %%"""
@@ -31,7 +120,6 @@
 %%            otherwise return this one and go on from there
 %%        """
 
-next(ReferencePos, NewPos, Data) -> ok.
 
 %% "
 %% How preprocessor works, and why:
@@ -53,26 +141,9 @@ next(ReferencePos, NewPos, Data) -> ok.
 %% parameters and want to see changing last signal datetime, not to defer event generation etc)
 %%
 %% I'm in favour of the latter. Thus:
-%%
-%% - a preprocessor analyses new state
-%% - if state is known it returns everything as-is for further processing
-%% - if state is uncertain then it
-%%   - fixes appropriate parameters (like set coords to old values if we don't know if it is moving)
-%%   - flags loc as uncertain (may be handy)
-%%   - stores orig. data in a queue
-%%   - returns it for further processing
-%% - when state becomes known then
-%%   - fixes data in the queue (incl. status so that we can generate events like 'started moving')
-%%   - flags them as 'update'
-%%   - returns the whole queue plus the most recent one, not flagged
-%%
-%% Further stages process all msgs, they know not to publish them (since it is historical), but to
-%% save it into db as update, not addition. Then it publishes the last one.
-%%
-%% The only drawback is that if device proc terminates in uncertain state then we should later run
-%% data reprocessing, we might store such info somewhere if it is that important (which it probably
-%% isn't).
-%% "
-%% All the above assumes we have only one preprocessor, which is most likely true. If we want
-%% more we'd have to make preprocesor rerun the whole machinery (preprocessor included) but
-%% first flag locations so as not to catch them again. Very complicated and not really necessary.
+%% A handler may state that a certain parameter can not be determined yet. It sets it to
+%% a temporary value (usu. the old one) and passes the location on, flagging it as
+%% "enqueue for recheck" (this is because we want the loc to pass through all handlers).
+%% When some future frame clears things up, the handler empties the queue, fixes
+%% locations and store them into a db.
+

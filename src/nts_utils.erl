@@ -14,7 +14,7 @@
 -export([bin2hex/1, hex2bin/1]).
 -export([json_encode_map/1, json_decode_map/1, format_error/1]).
 -export([time2string/1, time2bin/1, bin2time/1]).
--export([dtm/0, distance/2]).
+-export([dtm/0, distance/1, distance/2]).
 
 -export([get_brackets/3, ew_table/0]).
 -export([timediff/2]).
@@ -73,6 +73,8 @@ format_error({A, B}) ->
 %% which doesn't make sense and is a waste of CPU power since it involves
 %% a lot of trigonometric functions
 %% we can use a rather simple approximation instead
+%% coords are in minutes
+%% returns distance in km
 -spec distance({float(), float()}, {float(), float()}) -> float().
 distance({Lat1, Lon1}, {Lat2, Lon2}) ->
     % latitude is simple - one minute is one nautical mile
@@ -84,6 +86,11 @@ distance({Lat1, Lon1}, {Lat2, Lon2}) ->
     Dew = abs(Lon1 - Lon2) * EW,
     Dns = abs(Lat1 - Lat2) * NS,
     math:sqrt(math:pow(Dew, 2) + math:pow(Dns, 2)).
+
+-spec distance({loc(), loc()}) -> float().
+distance({Loc1, Loc2}) ->
+    distance({Loc1#loc.lat, Loc1#loc.lon},
+             {Loc2#loc.lat, Loc2#loc.lon}).
 
 get_brackets(V, [], [H|T]) ->
     get_brackets(V, [H], T);
