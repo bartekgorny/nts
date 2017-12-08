@@ -22,9 +22,10 @@
 -type floatmode() :: moving | uncertain | stopped.
 
 -record(floatstate, {refloc, mode = moving, trail = []}).
--type floatstate() :: #floatstate{refloc :: loc(),
-                                  mode :: floatmode(),
-                                  trail :: [loc()]}.
+%-type floatstate() :: #floatstate{refloc :: loc(),
+                                  %mode :: floatmode(),
+                                  %trail :: [loc()]}.
+-type floatstate() :: map().
 
 -spec handle_input(frametype(), frame(), loc(), loc(), internal(),
                    nts_device:state()) ->
@@ -32,19 +33,19 @@
 handle_input(location, _Frame, _OldLoc, NewLoc, Internal, _State) ->
     {ok, nts_location:set(status, up, true, NewLoc), Internal}.
 
-newstate() -> #floatstate{}.
+newstate() -> #{refloc => undefined, mode => moving, trail => []}.
 
 %% @doc Receives new location and floatfilter state; returns fixed location (meaning it may have
 %% its coordinates reset to those of the reference location) and modified state.
 -spec check_moving(loc(), floatstate()) -> {loc(), floatstate()}.
-check_moving(NewLoc, #floatstate{refloc = undefined} = FState) ->
-    {NewLoc, FState#floatstate{refloc = NewLoc}};
+check_moving(NewLoc, #{refloc := undefined} = FState) ->
+    {NewLoc, FState#{refloc => NewLoc}};
 check_moving(NewLoc, FState) ->
-    IsMove = is_move(NewLoc, FState#floatstate.refloc),
-    {NewMode, FixedLoc, NewState} = check_moving(FState#floatstate.mode, IsMove,
-                                                 FState#floatstate.trail,
+    #{refloc := RefLoc, mode := Mode, trail := Trail} = FState,
+    IsMove = is_move(NewLoc, RefLoc),
+    {NewMode, FixedLoc, NewState} = check_moving(Mode, IsMove, Trail,
                                                  NewLoc, FState), % duplication for greater readability
-    {FixedLoc, NewState#floatstate{mode = NewMode}}.
+    {FixedLoc, NewState#{mode => NewMode}}.
 
 -spec check_moving(Mode :: floatmode(),
                    IsMove :: boolean(),
@@ -53,17 +54,17 @@ check_moving(NewLoc, FState) ->
                    FState :: floatstate()) ->
     {floatmode(), loc(), floatstate()}.
 check_moving(moving, true, [], NewLoc, FState) ->
-    {moving, NewLoc, FState#floatstate{refloc = NewLoc}};
+    {moving, NewLoc, FState#{refloc => NewLoc}};
 check_moving(moving, false, [], NewLoc, FState) ->
     {uncertain, set_to_ref(NewLoc, FState), add_to_trail(NewLoc, FState)};
 check_moving(uncertain, true, _Trail, NewLoc, FState) ->
     % turns out we are moving
     % re-save locations from Trail (they were saved with coords set to ref)
-    {moving, NewLoc, FState#floatstate{trail = []}};
+    {moving, NewLoc, FState#{trail => []}};
 check_moving(uncertain, false, Trail, NewLoc, FState) ->
     case length(Trail) of
         ?TRAIL_LEN ->
-            {stopped, set_to_ref(NewLoc, FState), FState#floatstate{trail = []}};
+            {stopped, set_to_ref(NewLoc, FState), FState#{trail => []}};
         _ ->
             {uncertain, set_to_ref(NewLoc, FState), add_to_trail(NewLoc, FState)}
     end;
@@ -76,19 +77,25 @@ check_moving(stopped, true, [], NewLoc, FState) ->
 check_moving(_, _, _, NewLoc, FState) ->
     % catch-all - reset state
     ?WARNING_MSG("no previous match, resetting state, ~p", {NewLoc, FState}),
-    {moving, NewLoc, #floatstate{}}.
+    {moving, NewLoc, #{}}.
 
 is_move(A, B) ->
-    nts_utils:distance({A, B}) > ?MOVE_DISTANCE.
+    ct:pal("~p", [A]),
+    ct:pal("~p", [B]),
+    #{lat := LatA, lon := LonA} = A,
+    #{lat := LatB, lon := LonB} = B,
+    Dist = nts_utils:distance({LatA, LonA}, {LatB, LonB}),
+    ct:pal("~p", [Dist]),
+    Dist > ?MOVE_DISTANCE.
 
 %% set location coords to those of reference location
-set_to_ref(Loc, #floatstate{refloc = Ref}) ->
-    {Lat, Lon} = nts_location:coords(Ref),
-    nts_location:coords(Lat, Lon, Loc).
+set_to_ref(Loc, #{refloc := Ref}) ->
+    #{lat := Lat, lon := Lon} = Ref,
+    Loc#{lat => Lat, lon := Lon}.
 
 add_to_trail(Loc, FState) ->
-    Trail = FState#floatstate.trail,
-    FState#floatstate{trail = [Loc | Trail]}.
+    Trail = maps:get(trail, FState),
+    FState#{trail => [Loc | Trail]}.
 
 %%check_moving(New, Prev, Trail) ->
 %%    Moved = is_move(New, Prev),

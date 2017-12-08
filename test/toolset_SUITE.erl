@@ -17,10 +17,13 @@
 -compile(export_all).
 
 all() ->
-    [stabiliser,
-     dateutil,
-     utilities,
-     mapper].
+    [
+     %stabiliser,
+     floatfilter
+     %dateutil,
+     %utilities,
+     %mapper
+    ].
 
 
 init_per_suite(C) ->
@@ -29,35 +32,50 @@ init_per_suite(C) ->
 end_per_suite(_Config) -> ok.
 
 stabiliser(_) ->
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}],
-        {3, 3}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 4, 1}],
-        {3, 3}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 4, 1}, {5, 5}],
-        {5, 5}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 40}],
-        {3, 3}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}],
-        {3, 3}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 5}],
-        {7, 5}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 43},
-         {8, 44}, {9, 45}],
-        {9, 45}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 43},
-         {8, 44}, {9, 45}, {10, 4}],
-        {9, 45}),
-    apply_and_check(
-        [{1, 1}, {2, 2}, {3, 3}, {1000, 40}],
-        {1000, 40}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}],
+                    {3, 3}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 4, 1}],
+                    {3, 3}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 4, 1}, {5, 5}],
+                    {5, 5}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 40}],
+                    {3, 3}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}],
+                    {3, 3}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 5}],
+                    {7, 5}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 43},
+                     {8, 44}, {9, 45}],
+                    {9, 45}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {4, 40}, {5, 41}, {6, 42}, {7, 43},
+                     {8, 44}, {9, 45}, {10, 4}],
+                    {9, 45}),
+    apply_and_check(stabiliser, 
+                    [{1, 1}, {2, 2}, {3, 3}, {1000, 40}],
+                    {1000, 40}),
+    ok.
+
+floatfilter(_) ->
+    % moving
+    apply_and_check(floatfilter,
+                    [{1, 1}, {1, 20}],
+                    {1, 20}),
+    % uncertain, then moved
+    apply_and_check(floatfilter,
+                    [{1, 1}, {1, 5}, {1, 8}, {1, 3}],
+                    {1, 1}),
+    % stopped, then moved
+    apply_and_check(floatfilter,
+                    [{1, 1}, {1, 5}, {1, 8}, {1, 3}, {1, 4}, {1, 7}, {1, 20}],
+                    {1, 20}),
     ok.
 
 mapper(_) ->
@@ -110,22 +128,33 @@ utilities(_) ->
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-apply_and_check(Defs, Exp) ->
-    {Last, _} = apply_defs(Defs),
+apply_and_check(ModId, Defs, Exp) ->
+    {Last, _} = apply_defs(ModId, Defs),
     #{dtm := Dtm, lon := Lon} = Last,
     {_, {_, _, Sec}} = Dtm,
     Offset = 10000 * (Lon - 1),
     ?assertEqual(Exp, {Sec, round(Offset)}).
 
-apply_defs(Defs) ->
+apply_defs(ModId, Defs) ->
     Locs = loc_gen(Defs),
     FirstLoc = hd(Locs),
-    {FirstRes, State} = mod_stabiliser:filter_loc(FirstLoc, maps:get(sat, FirstLoc), undefined),
-    lists:foldl(fun filter_loc/2, {FirstRes, State}, tl(Locs)).
+    Fun = procfun(ModId),
+    Initial = initial_state(ModId),
+    {FirstRes, State} = Fun(FirstLoc, {0, Initial}),
+    lists:foldl(Fun, {FirstRes, State}, tl(Locs)).
 
-filter_loc(Loc, {_, State}) ->
-    mod_stabiliser:filter_loc(Loc, maps:get(sat, Loc), State).
 
+procfun(stabiliser) ->
+    fun(Loc, {_, State}) ->
+        mod_stabiliser:filter_loc(Loc, maps:get(sat, Loc), State)
+    end;
+procfun(floatfilter) ->
+    fun(Loc, {_, State}) ->
+        mod_floatfilter:check_moving(Loc, State)
+    end.
+
+initial_state(stabiliser) -> undefined;
+initial_state(floatfilter) -> mod_floatfilter:newstate().
 
 loc_gen(Defs) ->
     lists:reverse(loc_gen(Defs, [])).

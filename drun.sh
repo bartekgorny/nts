@@ -5,5 +5,7 @@
 #
 # ./drun ./runtest.sh hooks_SUITE
 
+eval $(docker-machine env)
+
 cmd="docker exec e20 /bin/bash -c 'cd /nts; $1 $2 $3 $4 $5'"
 eval $cmd
