@@ -126,11 +126,14 @@ full_history(DevId, Start, Stop) ->
 
 %% @doc if we receive new info we calculate new state of device and save it here, together
 %% with the incoming frame, whatever it may be, and internal state data
+%% ids are auto-generated
 -spec save_loc(devid(), loc(), frame(), map()) -> ok | {error, atom()}.
 save_loc(DevId, Loc, Frame, Internal) ->
     Q = "INSERT INTO device_" ++
         binary_to_list(DevId) ++
-        "(dtm, coords, data, hex, frame, received, internal) values (" ++
+        "(id, dtm, coords, data, hex, frame, received, internal) values (" ++
+        integer_to_list(Frame#frame.id) ++
+        "," ++
         quote(nts_utils:time2string((Loc#loc.dtm))) ++
         "," ++
         quote(encode_coords(Loc#loc.lat, Loc#loc.lon)) ++
@@ -144,8 +147,13 @@ save_loc(DevId, Loc, Frame, Internal) ->
         quote(nts_utils:time2string((Frame#frame.received))) ++
         "," ++
         quote(to_json(Internal)) ++
-        ")",
+        ") ON CONFLICT (id) DO UPDATE" ++
+        " SET dtm=" ++ quote(nts_utils:time2string((Loc#loc.dtm))) ++
+        ", coords=" ++ io_lib:format("'(~p, ~p)'", [Loc#loc.lat, Loc#loc.lon]) ++
+        ", data=" ++ quote(to_json(Loc#loc.data)) ++
+        ", internal=" ++ quote(to_json(Internal)),
     query(Q).
+
 
 %% @doc for storing frames only if received from buffer (are older then current state)
 %% to be used later for reprocessing
@@ -153,7 +161,9 @@ save_loc(DevId, Loc, Frame, Internal) ->
 save_frame(DevId, Frame) ->
     Q = "INSERT INTO device_" ++
     binary_to_list(DevId) ++
-    "(hex, frame, received) values (" ++
+    "(id, hex, frame, received) values (" ++
+    integer_to_list(Frame#frame.id) ++
+    "," ++
     quote(Frame#frame.hex) ++
     "," ++
     quote(prepare_frame(Frame)) ++
@@ -221,7 +231,7 @@ get_last_loc(DevId, Dtm, Fields) ->
             case query(Qindirect) of
                 {error, E} -> {error, E};
                 {_, [R1]} -> parse_loc(R1);
-                {_, []} -> {#loc{}, #{}}
+                {_, []} -> undefined
             end
     end.
 

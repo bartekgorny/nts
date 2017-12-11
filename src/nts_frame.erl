@@ -14,11 +14,13 @@
 %% API
 -export([parse/2, parse/4, get/2, empty/0]).
 
+-export([generate_frame_id/0]).
+
 %% @doc parse fresh frame, received from socket
-%% set id to 0 and datetime to now
+%% set id to something guaranteed to be unique and datetime to now
 -spec parse(atom() | list(), binary()) -> frame().
 parse(Dtype, Frame) ->
-    parse(Dtype, 0, Frame, nts_utils:dtm()).
+    parse(Dtype, generate_frame_id(), Frame, nts_utils:dtm()).
 
 %% @doc parse frame retrieved from database
 %% we know it and when it was received
@@ -37,4 +39,14 @@ get(Key, Frame) ->
     maps:get(Key, Frame#frame.values, undefined).
 
 empty() ->
-    #frame{received = nts_utils:dtm()}.
+    #frame{id = generate_frame_id(), received = nts_utils:dtm()}.
+
+% timestamp in microseconds, plus two random digits to be 100% sure it is unique
+generate_frame_id() ->
+    {A, B, C} = os:timestamp(),
+    Mln = 1000000,
+    M = (A * Mln + B) * Mln + C,
+    T1 = rand:uniform(9),
+    T2 = rand:uniform(9),
+    M * 100 + T1 * 10 + T2.
+

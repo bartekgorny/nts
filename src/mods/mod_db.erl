@@ -23,7 +23,7 @@ handle_publishstate(Acc, DevId, Loc) ->
     {ok, Acc}.
 
 
-save_or_update(0, DevId, Loc, Frame, Internal) ->
-    ok = nts_db:save_loc(DevId, Loc, Frame, Internal);
-save_or_update(Id, DevId, Loc, _Frame, Internal) ->
-    ok = nts_db:update_loc(DevId, Id, Loc, Internal).
+save_or_update(_, DevId, Loc, Frame, Internal) ->
+    ok = nts_db:save_loc(DevId, Loc, Frame, Internal).
+%save_or_update(Id, DevId, Loc, _Frame, Internal) ->
+    %ok = nts_db:update_loc(DevId, Id, Loc, Internal).

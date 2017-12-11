@@ -18,7 +18,7 @@
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device, transaction].
-%%    [device].
+   %[frames_and_updates].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -38,15 +38,21 @@ end_per_suite(_Config) ->
     application:stop(nts).
 
 locs_and_frames(_) ->
+    undefined = nts_db:last_loc(?DEVID, fromnow(-10)),
     L1 = generate_location(-20),
     F1 = <<1, 99, 123>>,
     R1 = fromnow(-3),
-    nts_db:save_loc(?DEVID, L1, #frame{hex = true, data = F1, received = R1}, #{}),
+    nts_db:save_loc(?DEVID, L1, 
+                    #frame{hex = true, data = F1, received = R1,
+                           id = nts_frame:generate_frame_id()}, 
+                    #{}),
     L2 = generate_location(-18),
     Dtm2 = L2#loc.dtm,
     F2 = <<"Frame01">>,
     R2 = fromnow(-2),
-    nts_db:save_loc(?DEVID, L2, #frame{hex = false, data = F2, received = R2},
+    nts_db:save_loc(?DEVID, L2, 
+                    #frame{hex = false, data = F2, received = R2,
+                           id = nts_frame:generate_frame_id()},
                     #{statevar => 22}),
     % last location from history
     LastDirect = nts_db:last_loc(?DEVID, Dtm2),
@@ -55,9 +61,7 @@ locs_and_frames(_) ->
     LastIndirect = nts_db:last_loc(?DEVID, fromnow(-10)),
     ?assertEqual(Dtm2, LastIndirect#loc.dtm),
     ?assertEqual(18, LastIndirect#loc.lat),
-    {Null, _} = nts_db:last_loc(?DEVID, fromnow(-22)),
-    ?assertEqual(undefined, Null#loc.dtm),
-    ?assertEqual(0.0, Null#loc.lat),
+    undefined = nts_db:last_loc(?DEVID, fromnow(-22)),
     % last loc and state
     {LastLoc, LastS} = nts_db:last_state(?DEVID),
     ?assertEqual(Dtm2, LastLoc#loc.dtm),
@@ -89,11 +93,11 @@ locs_and_frames(_) ->
     ok.
 
 frames_and_updates(_) ->
-    F1 = #frame{hex = false, data = <<"aaa">>, received = fromnow(-30)},
-    nts_db:save_frame(?DEVID, F1),
-    [F] = nts_db:frames(?DEVID, fromnow(-32), fromnow(-28)),
+    F = #frame{id = nts_frame:generate_frame_id(),
+                hex = false, data = <<"aaa">>, received = fromnow(-30)},
+    nts_db:save_frame(?DEVID, F),
     L = generate_location(-31),
-    nts_db:update_loc(?DEVID, F#frame.id, L, #{}),
+    nts_db:save_loc(?DEVID, L, F, #{}),
     [L1] = nts_db:history(?DEVID, fromnow(-33), fromnow(-30)),
     ?assertEqual(-31, maps:get(offset, L1#loc.data)),
     ok.
@@ -126,7 +130,9 @@ concurrency(_) ->
     % to prove that many concurrent processes can write at the same time
     L1 = generate_location(-1),
     F1 = #frame{hex = false, data = <<"abc">>, received = fromnow(-1)},
-    F = fun() -> nts_db:save_loc(?DEVID, L1, F1, #{}) end,
+    F = fun() -> nts_db:save_loc(?DEVID, L1, 
+                                 F1#frame{id = nts_frame:generate_frame_id()}, 
+                                 #{}) end,
     Count = 200,
     lists:map(fun(_) -> spawn(F) end, lists:seq(1, Count)),
     % a brief pause so that all processes can send their queries before we do

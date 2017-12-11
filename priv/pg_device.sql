@@ -15,18 +15,10 @@ CREATE TABLE device_01 (
 
 ALTER TABLE device_01 OWNER TO nts;
 
-CREATE SEQUENCE device_01_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
+ALTER TABLE ONLY device_01
+    ADD CONSTRAINT device_01_key UNIQUE (id);
 
-ALTER TABLE device_01_id_seq OWNER TO nts;
-
-ALTER SEQUENCE device_01_id_seq OWNED BY device_01.id;
-
-ALTER TABLE ONLY device_01 ALTER COLUMN id SET DEFAULT nextval('device_01_id_seq'::regclass);
+CREATE INDEX device_01_id ON device_01 USING btree (id);
 
 CREATE INDEX device_01_dtm ON device_01 USING btree (dtm);
 
