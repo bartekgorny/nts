@@ -18,11 +18,11 @@
 
 all() ->
     [
-     %stabiliser,
-     floatfilter
-     %dateutil,
-     %utilities,
-     %mapper
+     stabiliser,
+     floatfilter,
+     dateutil,
+     utilities,
+     mapper
     ].
 
 
