@@ -36,7 +36,13 @@ handle_input(location, _Frame, _OldLoc, NewLoc, Internal, _State) ->
     % if state changed to a definite state (different from the previous
     % definite state) create event data and return so that device can
     % generate an event.
-    {ok, nts_location:set(status, up, true, NewLoc), Internal}.
+    FState0 = maps:get(floatstate, Internal, newstate()),
+    FState = decode_state(FState0),
+    NewLocData = mapify(NewLoc),
+    {FixedLocData, NewFState0} = check_moving(NewLocData, FState),
+    FixedLoc = nts_location:coords(maps:get(lat, FixedLocData), maps:get(lon, FixedLocData), NewLoc),
+    NewFState = encode_state(NewFState0),
+    {ok, FixedLoc, Internal#{floatstate => NewFState}}.
 
 newstate() -> #{refloc => undefined, mode => {moving, true}, trail => []}.
 
@@ -55,7 +61,7 @@ check_moving(NewLoc, FState) ->
 
 -spec check_moving(Mode :: floatmode(),
                    IsMove :: boolean(),
-                   Trail :: [loc()],
+                   Trail :: [map()],
                    NewLoc :: loc(),
                    FState :: floatstate()) ->
     {floatmode(), loc(), floatstate()}.
@@ -102,3 +108,31 @@ set_to_ref(Loc, #{refloc := Ref}) ->
 add_to_trail(Loc, FState) ->
     Trail = maps:get(trail, FState),
     FState#{trail => [Loc | Trail]}.
+
+mapify(Loc) ->
+    {Lat, Lon} = nts_location:coords(Loc),
+    #{id => nts_location:id(Loc), lat => Lat, lon => Lon}.
+
+encode_state(#{mode := {M, S}} = FState) ->
+    FState#{mode => <<(encode_m(M))/binary, ",", (encode_s(S))/binary>>}.
+
+decode_state(#{mode := {_, _}} = FState) ->
+    FState;
+decode_state(#{mode := BMode} = FState) ->
+    [M, S] = binary:split(BMode, <<",">>),
+    FState#{mode => {decode_m(M), decode_s(S)}}.
+
+encode_m(M) ->
+    atom_to_binary(M, utf8).
+
+decode_m(M) when is_atom(M) ->
+    M;
+decode_m(M) ->
+    binary_to_existing_atom(M, utf8).
+
+encode_s(true) -> <<"true">>;
+encode_s(false) -> <<"false">>.
+
+decode_s(A) when is_atom(A) -> A;
+decode_s(<<"true">>) -> true;
+decode_s(<<"false">>) -> false.

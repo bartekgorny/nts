@@ -18,7 +18,9 @@
 
 -import(nts_helpers, [fromnow/1]).
 
-all() ->
+all() -> 
+%%    [floatfilter].
+%%all(a) ->
     [
         simple_test,
         internal_state,
@@ -67,6 +69,8 @@ handlers_for_testcase(internal_state) ->
     [{procloc, {generic, device_SUITE, handler_trail, 25}}];
 handlers_for_testcase(stabiliser) ->
     [{procloc, {generic, mod_stabiliser, 25}}];
+handlers_for_testcase(floatfilter) ->
+    [{procloc, {generic, mod_floatfilter, 25}}];
 handlers_for_testcase(_) ->
     [].
 
@@ -354,6 +358,15 @@ stabiliser(_) ->
     send_and_check(Dev, ?DEVID, -8, {1.0001, 1.0001}, {1.0001, 1.0001}),
     send_and_check(Dev, ?DEVID, -6, {2, 2}, {1.0001, 1.0001}),
     send_and_check(Dev, ?DEVID, -4, {1.0002, 1.0002}, {1.0002, 1.0002}),
+    ok.
+
+floatfilter(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    send_and_check(Dev, ?DEVID, -10, {1, 1}, {1, 1}),
+    send_and_check(Dev, ?DEVID, -9, {1, 2}, {1, 2}),
+    send_and_check(Dev, ?DEVID, -8, {1, 2.0001}, {1, 2}),
+    send_and_check(Dev, ?DEVID, -8, {1, 3}, {1, 3}),
     ok.
 
 %%%===================================================================
