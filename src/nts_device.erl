@@ -191,7 +191,8 @@ keep_state_with_timeout(NewState, From) ->
                             {event_timeout, TVal * 1000, idle}]}.
 
 set_timestamps(Frame, NewLoc) ->
-    NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc),
+    NewLoc0 = nts_location:id(Frame#frame.id, NewLoc),
+    NewLoc1 = nts_location:set(status, last_signal, Frame#frame.received, NewLoc0),
     case maps:get(dtm, Frame#frame.values, undefined) of
         undefined -> % lame - should never happen, devices should set timestamps
             NewLoc1#loc{dtm = Frame#frame.received};

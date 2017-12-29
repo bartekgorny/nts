@@ -12,7 +12,7 @@
 
 %% API
 -export([new/0]).
--export([id/1, dtm/1, dtm/2, coords/1, coords/3, get/3, set/4, remove/3]).
+-export([id/1, id/2, dtm/1, dtm/2, coords/1, coords/3, get/3, set/4, remove/3]).
 -export([flag/3]).
 
 -spec new() -> loc().
@@ -20,6 +20,9 @@ new() -> #loc{}.
 
 -spec id(loc()) -> integer().
 id(Loc) -> Loc#loc.id.
+
+-spec id(integer(), loc()) -> loc().
+id(Id, Loc) -> Loc#loc{id = Id}.
 
 -spec dtm(loc()) -> datetime().
 dtm(Loc) -> Loc#loc.dtm.

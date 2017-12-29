@@ -14,7 +14,7 @@
 %% API
 -export([query/1, history/1, history/3, save_loc/4]).
 -export([query/2, transaction/1]).
--export([frames/3, save_frame/2, update_loc/4, update_state/2]).
+-export([frames/3, save_frame/2, update_loc/4, update_state/2, update_coords/4]).
 -export([full_history/3]).
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
 -export([save_event/1, event_log/4, delete_events/3, clear_events/2]).
@@ -183,6 +183,13 @@ update_loc(DevId, Id, Loc, Internal) ->
         " WHERE id=" ++ integer_to_list(Id),
     query(Q).
 
+
+-spec update_coords(devid(), integer(), float(), float()) -> ok | {error, atom()}.
+update_coords(DevId, Id, Lat, Lon) ->
+    Q = "UPDATE device_" ++ binary_to_list(DevId) ++
+        " SET coords=" ++ io_lib:format("'(~p, ~p)'", [Lat, Lon]) ++
+        " WHERE id=" ++ integer_to_list(Id),
+    query(Q).
 
 -spec update_state(devid(), loc()) -> ok.
 update_state(DevId, Loc) ->

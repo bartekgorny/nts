@@ -19,8 +19,8 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() -> 
-%%    [floatfilter].
-%%all(a) ->
+    [floatfilter].
+all(a) ->
     [
         simple_test,
         internal_state,
@@ -363,10 +363,38 @@ stabiliser(_) ->
 floatfilter(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Dev} = nts_device:start_link(?DEVID),
-    send_and_check(Dev, ?DEVID, -10, {1, 1}, {1, 1}),
-    send_and_check(Dev, ?DEVID, -9, {1, 2}, {1, 2}),
-    send_and_check(Dev, ?DEVID, -8, {1, 2.0001}, {1, 2}),
-    send_and_check(Dev, ?DEVID, -8, {1, 3}, {1, 3}),
+    send_and_check(Dev, ?DEVID, -20, {1, 1}, {1, 1}),
+    send_and_check(Dev, ?DEVID, -19, {1, 2}, {1, 2}),
+    send_and_check(Dev, ?DEVID, -18, {1, 2.0001}, {1, 2}), % are we moving?
+    send_and_check(Dev, ?DEVID, -17, {1, 3}, {1, 3}), % yes
+    send_and_check(Dev, ?DEVID, -16, {1, 4}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -15, {1, 4.00001}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -14, {1, 3.99999}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -13, {1, 4.00001}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -12, {1, 3.99999}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -11, {1, 4.00001}, {1, 4}), % stopped
+    send_and_check(Dev, ?DEVID, -10, {1, 3.99999}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -9, {1, 4.00001}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -8, {1, 3.99999}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -7, {1, 5}, {1, 5}), % started moving
+    send_and_check(Dev, ?DEVID, -6, {1, 6}, {1, 6}),
+    LocationHistory = nts_db:history(?DEVID, fromnow(-25), fromnow(0)),
+    ExpectedHistory = [{1, 1},
+                       {1, 2},
+                       {1, 2.0001}, % should have been fixed
+                       {1, 3},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 4},
+                       {1, 5},
+                       {1, 6}],
+    verify_history(LocationHistory, ExpectedHistory),
     ok.
 
 %%%===================================================================
@@ -492,3 +520,9 @@ send_and_check(Dev, DevId, Offset, Loc, Exp) ->
     nts_device:process_frame(Dev, mkframe(Offset, Loc)),
     Res = nts_location:coords(nts_db:current_state(DevId)),
     ?assertEqual(Exp, Res).
+
+verify_history([], []) ->
+    ok;
+verify_history([Loc|LocTail], [Exp|ExpTail]) ->
+    ?assertEqual(Exp, nts_location:coords(Loc)),
+    verify_history(LocTail, ExpTail).

@@ -32,7 +32,7 @@
 -spec handle_input(frametype(), frame(), loc(), loc(), internal(),
                    nts_device:state()) ->
     {ok, loc(), internal()}.
-handle_input(location, _Frame, _OldLoc, NewLoc, Internal, _State) ->
+handle_input(location, _Frame, _OldLoc, NewLoc, Internal, State) ->
     % if state changed to a definite state (different from the previous
     % definite state) create event data and return so that device can
     % generate an event.
@@ -41,6 +41,10 @@ handle_input(location, _Frame, _OldLoc, NewLoc, Internal, _State) ->
     NewLocData = mapify(NewLoc),
     {FixedLocData, NewFState0} = check_moving(NewLocData, FState),
     FixedLoc = nts_location:coords(maps:get(lat, FixedLocData), maps:get(lon, FixedLocData), NewLoc),
+    maybe_fix_trail(maps:get(mode, FState),
+                    maps:get(mode, NewFState0),
+                    maps:get(trail, FState),
+                    nts_device:devid(State)),
     NewFState = encode_state(NewFState0),
     {ok, FixedLoc, Internal#{floatstate => NewFState}}.
 
@@ -81,23 +85,20 @@ check_moving({moving, false}, false, Trail, NewLoc, FState) ->
             {{moving, false}, set_to_ref(NewLoc, FState), add_to_trail(NewLoc, FState)}
     end;
 check_moving({stopped, true}, false, [], NewLoc, FState) ->
-    {stopped, set_to_ref(NewLoc, FState), FState};
+    {{stopped, true}, set_to_ref(NewLoc, FState), FState};
 check_moving({stopped, true}, true, [], NewLoc, FState) ->
     %% if needed we could add some logic to make sure he left for good (meaning: enter another
     %% state and collect some trail before changing to `moving`)
-    {moving, NewLoc, FState};
+    {{moving, true}, NewLoc, FState};
 check_moving(_, _, _, NewLoc, FState) ->
     % catch-all - reset state
     ?WARNING_MSG("no previous match, resetting state, ~p", {NewLoc, FState}),
-    {moving, NewLoc, #{}}.
+    {{moving, true}, NewLoc, #{}}.
 
 is_move(A, B) ->
-    ct:pal("~p", [A]),
-    ct:pal("~p", [B]),
     #{lat := LatA, lon := LonA} = A,
     #{lat := LatB, lon := LonB} = B,
     Dist = nts_utils:distance({LatA, LonA}, {LatB, LonB}),
-    ct:pal("~p", [Dist]),
     Dist > ?MOVE_DISTANCE.
 
 %% set location coords to those of reference location
@@ -136,3 +137,12 @@ encode_s(false) -> <<"false">>.
 decode_s(A) when is_atom(A) -> A;
 decode_s(<<"true">>) -> true;
 decode_s(<<"false">>) -> false.
+
+maybe_fix_trail({moving, false}, {moving, true}, Trail, DevId) ->
+    lists:map(fun(#{id := Id, lat := Lat, lon := Lon}) ->
+                  nts_db:update_coords(DevId, Id, Lat, Lon)
+              end,
+              Trail),
+    ok;
+maybe_fix_trail(_, _, _, _) ->
+    ok.
