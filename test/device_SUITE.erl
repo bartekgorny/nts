@@ -19,7 +19,7 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() -> 
-    [floatfilter].
+    [rewrite_buffered].
 all(a) ->
     [
         simple_test,
@@ -33,7 +33,8 @@ all(a) ->
         config,
         sensor_events,
         reprocessing,
-        stabiliser
+        stabiliser,
+        floatfilter
     ].
 
 init_per_suite(C) ->
@@ -406,6 +407,23 @@ floatfilter(_) ->
     ?assertEqual(5, Moved#event.lon),
     ok.
 
+rewrite_buffered(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-9, -18, #{ignition => 0})),
+    check_ign(?DEVID, Dev, 9, 0),
+    nts_device:process_frame(Dev, mkframe(-7, -14)),
+    nts_device:process_frame(Dev, mkframe(-8, -16, #{ignition => 1})),
+    check_ign(?DEVID, Dev, 7, 0), % older frame was ignored
+    timer:sleep(1000),
+    nts_device:process_frame(Dev, mkframe(-5, -10)),
+    timer:sleep(1000),
+    nts_device:process_frame(Dev, mkframe(-4, -8)),
+    timer:sleep(1000),
+    nts_device:process_frame(Dev, mkframe(-3, -6)),
+    check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '7' frame into account
+    ok.
+
 %%%===================================================================
 %%% utils
 %%%===================================================================
@@ -535,3 +553,17 @@ verify_history([], []) ->
 verify_history([Loc|LocTail], [Exp|ExpTail]) ->
     ?assertEqual(Exp, nts_location:coords(Loc)),
     verify_history(LocTail, ExpTail).
+
+check_ign(DevId, Dev, ExpLon, ExpIgn) ->
+    CState = nts_device:getstate(Dev),
+    DBState = nts_db:current_state(DevId),
+    check_state(ExpLon, ExpIgn, CState),
+    check_state(ExpLon, ExpIgn, DBState).
+
+check_state(ExpLat, ExpIgn, St) ->
+    {Lat, _} = nts_location:coords(St),
+    ?assertEqual(ExpLat, Lat),
+    ?assertEqual(ExpIgn, nts_location:get(sensor, ignition, St)),
+    ok.
+
+
