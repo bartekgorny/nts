@@ -260,15 +260,15 @@ state_recording(_) ->
     LastLoc = nts_db:last_loc(?DEVID),
     ?assertMatch({10, 20}, nts_location:coords(LastLoc)),
     ?assertClose(RecDtm,
-        nts_utils:bin2time(nts_location:get(status, last_signal, LastLoc))),
+                 nts_utils:bin2time(nts_location:get(status, last_signal, LastLoc))),
     ?assertClose(Dtm,
-        nts_utils:bin2time(nts_location:get(status, last_signal_dtm, LastLoc))),
+                 nts_utils:bin2time(nts_location:get(status, last_signal_dtm, LastLoc))),
     CurLoc = nts_db:current_state(?DEVID),
     ?assertMatch({10, 20}, nts_location:coords(CurLoc)),
     ?assertClose(RecDtm,
-        nts_utils:bin2time(nts_location:get(status, last_signal, CurLoc))),
+                 nts_utils:bin2time(nts_location:get(status, last_signal, CurLoc))),
     ?assertClose(Dtm,
-        nts_utils:bin2time(nts_location:get(status, last_signal_dtm, CurLoc))),
+                 nts_utils:bin2time(nts_location:get(status, last_signal_dtm, CurLoc))),
     ?assertEqual(true, nts_location:get(status, up, CurLoc)),
     nts_device:stop(Dev),
     CurLoc2 = nts_db:current_state(?DEVID),
@@ -372,8 +372,8 @@ floatfilter(_) ->
     send_and_check(Dev, ?DEVID, -14, {1, 3.99999}, {1, 4}),
     send_and_check(Dev, ?DEVID, -13, {1, 4.00001}, {1, 4}),
     send_and_check(Dev, ?DEVID, -12, {1, 3.99999}, {1, 4}),
-    send_and_check(Dev, ?DEVID, -11, {1, 4.00001}, {1, 4}), % stopped
-    send_and_check(Dev, ?DEVID, -10, {1, 3.99999}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -11, {1, 4.00001}, {1, 4}),
+    send_and_check(Dev, ?DEVID, -10, {1, 3.99999}, {1, 4}), % stopped
     send_and_check(Dev, ?DEVID, -9, {1, 4.00001}, {1, 4}),
     send_and_check(Dev, ?DEVID, -8, {1, 3.99999}, {1, 4}),
     send_and_check(Dev, ?DEVID, -7, {1, 5}, {1, 5}), % started moving
@@ -395,6 +395,15 @@ floatfilter(_) ->
                        {1, 5},
                        {1, 6}],
     verify_history(LocationHistory, ExpectedHistory),
+    Events = event_listener:flush(),
+    Ev = [E || {[device, moving, _], E} <- Events],
+    [Stopped, Moved] = Ev,
+    ?assertEqual([device, moving, stopped], Stopped#event.type),
+    ?assertEqual(fromnow(-10), Stopped#event.dtm),
+    ?assertEqual(4, Stopped#event.lon),
+    ?assertEqual([device, moving, started], Moved#event.type),
+    ?assertEqual(fromnow(-7), Moved#event.dtm),
+    ?assertEqual(5, Moved#event.lon),
     ok.
 
 %%%===================================================================

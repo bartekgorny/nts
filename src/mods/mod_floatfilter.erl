@@ -39,14 +39,18 @@ handle_input(location, _Frame, _OldLoc, NewLoc, Internal, State) ->
     FState0 = maps:get(floatstate, Internal, newstate()),
     FState = decode_state(FState0),
     NewLocData = mapify(NewLoc),
-    {FixedLocData, NewFState0} = check_moving(NewLocData, FState),
+    {FixedLocData, NewFState} = check_moving(NewLocData, FState),
     FixedLoc = nts_location:coords(maps:get(lat, FixedLocData), maps:get(lon, FixedLocData), NewLoc),
-    maybe_fix_trail(maps:get(mode, FState),
-                    maps:get(mode, NewFState0),
+    ModePrev = maps:get(mode, FState),
+    ModeNext = maps:get(mode, NewFState),
+    DevId = nts_device:devid(State),
+    maybe_fix_trail(ModePrev,
+                    ModeNext,
                     maps:get(trail, FState),
-                    nts_device:devid(State)),
-    NewFState = encode_state(NewFState0),
-    {ok, FixedLoc, Internal#{floatstate => NewFState}}.
+                    DevId),
+    NewFStateEnc = encode_state(NewFState),
+    Internal1 = maybe_add_event(ModePrev, ModeNext, DevId, FixedLoc, Internal),
+    {ok, FixedLoc, Internal1#{floatstate => NewFStateEnc}}.
 
 newstate() -> #{refloc => undefined, mode => {moving, true}, trail => []}.
 
@@ -146,3 +150,18 @@ maybe_fix_trail({moving, false}, {moving, true}, Trail, DevId) ->
     ok;
 maybe_fix_trail(_, _, _, _) ->
     ok.
+
+maybe_add_event({stopped, _}, {moving, true}, DevId, Loc, Internal) ->
+    nts_device:add_event(nts_event:create_event([device, moving, started],
+                                                DevId,
+                                                Loc,
+                                                nts_location:dtm(Loc)),
+                         Internal);
+maybe_add_event({moving, _}, {stopped, true}, DevId, Loc, Internal) ->
+    nts_device:add_event(nts_event:create_event([device, moving, stopped],
+                                                DevId,
+                                                Loc,
+                                                nts_location:dtm(Loc)),
+                         Internal);
+maybe_add_event(_, _, _, _, Internal) ->
+    Internal.
