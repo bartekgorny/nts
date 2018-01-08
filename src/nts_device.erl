@@ -132,14 +132,6 @@ init([DevId]) ->
 
 callback_mode() -> [state_functions].
 
-% note: it does not make much sense. If we reprocess data, we should come up with exactly
-% the same result, whether we use old status or not. The only difference is in 'up/down'
-% but it is trivial: if frame was fresh then device was up, if it was buffered then it
-% was down at that time, end of story. The reproc stuff can then be simplified.
-%
-% we have to either flag a frame in db as buffered or just compared received with dtm
-% the we know immediately
-
 normal({call, From}, {reprocess_data, FromDtm}, State) ->
     NextState = do_reprocess_data(FromDtm, State),
     {keep_state, NextState, [{reply, From, ok}]};
@@ -344,7 +336,7 @@ maybe_emit_device_up(_, _, #state{up = true} = State) ->
     State;
 maybe_emit_device_up(reproc, _, State) ->
     State;
-maybe_emit_device_up(_, Loc, State) ->
+maybe_emit_device_up(A, Loc, State) ->
     Evt = nts_event:create_event([device, activity, up],
         State#state.devid,
         Loc,
@@ -365,7 +357,8 @@ do_reprocess_data(FromDtm, State0) ->
     CurrentState.
 
 reprocess_record({Fr, Loc}, State) ->
-    Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data, Fr#frame.received),
+    Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data,
+                            Fr#frame.received),
     do_process_frame(reproc, Loc, Frame, State).
 
 get_up_status(Loc) ->
@@ -376,7 +369,7 @@ get_up_status(Loc) ->
 
 start_reproc_timer(Dtm, #state{reproc_timer = undefined} = State) ->
     TVal = get_config(rewrite_history_timeout, State),
-    Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_buffer, [self(), Dtm]),
+    Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_data, [self(), Dtm]),
     State#state{reproc_timer = Timer};
 start_reproc_timer(Dtm, State) ->
     start_reproc_timer(Dtm, cancel_reproc_timer(State)).

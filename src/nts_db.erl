@@ -427,7 +427,9 @@ parse_loc({BId, D, Coords, BData, BInternal}) ->
 parse_state({DevId, D, Coords, BData}) ->
     {DevId, parse_loc({<<"0">>, D, Coords, BData})}.
 
--spec parse_binary_coords(binary()) -> {float(), float()}.
+-spec parse_binary_coords(binary() | null) -> {float(), float()} | undefined.
+parse_binary_coords(null) ->
+    {0, 0};
 parse_binary_coords(Coords) ->
     [A, O] = binary:split(Coords, <<$,>>),
     Lat = list_to_arith(tl(binary_to_list(A))),
@@ -445,7 +447,9 @@ parse_binary_coords(Coords) ->
 encode_coords(Lat, Lon) ->
     io_lib:format("(~p, ~p)", [Lat, Lon]).
 
--spec parse_binary_datetime(binary()) -> datetime().
+-spec parse_binary_datetime(binary() | null) -> datetime() | undefined.
+parse_binary_datetime(null) ->
+    undefined;
 parse_binary_datetime(R) ->
     L = binary:bin_to_list(R),
     Y = extract_int(L, 1, 4),

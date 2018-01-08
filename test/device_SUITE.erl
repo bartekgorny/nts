@@ -18,7 +18,7 @@
 
 -import(nts_helpers, [fromnow/1]).
 
-all() -> 
+all() ->
     [rewrite_buffered].
 all(a) ->
     [
@@ -208,14 +208,14 @@ mapping(_) ->
     Sensors1 = #{sensor_a => undefined,
                  sensor_b => undefined,
                  sensor_c => undefined},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    nts_device:process_frame(Dev, mkframe(-9, -18, Sensors1)),
     check_sensors(Dev, #{sensor_a => 0,
                          sensor_b => 4,
                          sensor_c => 4}),
     Sensors2 = #{sensor_a => 0,
                  sensor_b => 0,
                  sensor_c => 0},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors2)),
+    nts_device:process_frame(Dev, mkframe(-8, -16, Sensors2)),
     check_sensors(Dev, #{sensor_a => 0,
                          sensor_b => 0,
                          sensor_c => 4}),
@@ -231,14 +231,14 @@ mapping_custom(_) ->
     Sensors0 = #{input_1 => 4,
                  input_2 => 4,
                  sensor_c => 4},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors0)),
+    nts_device:process_frame(Dev, mkframe(-12, -22, Sensors0)),
     check_sensors(Dev, #{sensor_a => 4,
                          sensor_b => 4,
                          sensor_c => 4}),
     Sensors1 = #{input_1 => undefined,
                  input_2 => undefined,
                  sensor_c => undefined},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    nts_device:process_frame(Dev, mkframe(-11, -21, Sensors1)),
     check_sensors(Dev, #{sensor_a => 4,
                          sensor_b => 4,
                          sensor_c => 0}),

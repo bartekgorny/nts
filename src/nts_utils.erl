@@ -60,6 +60,8 @@ h2i(H) ->
 json_encode_map(Data) ->
     jiffy:encode(cookmap(Data)).
 
+json_decode_map(null) ->
+    #{};
 json_decode_map(<<"">>) ->
     #{};
 json_decode_map(Data) ->
