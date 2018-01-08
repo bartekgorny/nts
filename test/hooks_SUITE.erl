@@ -17,12 +17,13 @@
 
 % copied from nts_device
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
-                config = #{}, up = false}).
+    config = #{}, up = false, reproc_timer = undefined}).
 
 -compile(export_all).
 
 all() ->
     [one_call, other_hooks, dynamic_procloc, dynamic_other].
+%%    [one_call].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),

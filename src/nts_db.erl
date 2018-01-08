@@ -498,6 +498,7 @@ log_query(Q) ->
         {ok, true} ->
             ?INFO_MSG("QUERY: ~s", [Q]);
         _ ->
+            ?INFO_MSG("QUERY: ~s", [Q]),
             ok
     end.
 
