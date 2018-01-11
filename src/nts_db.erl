@@ -25,15 +25,17 @@
 
 query(Q) ->
     log_query(Q),
+    QType = hd(Q),
     Conn = nts_db_conn:get_connection(),
     nts_metrics:up([db, ops]),
-    Ret = case epgsql:squery(Conn, Q) of
-              {ok, Types, Values} -> {Types, Values};
-              {ok, 0} ->
+    Ret = case {QType, epgsql:squery(Conn, Q)} of
+              {"D", {ok, 0}} -> ok; % deleted 0 rows
+              {_, {ok, Types, Values}} -> {Types, Values};
+              {_, {ok, 0}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, op_failed};
-              {ok, _} -> ok;
-              {error, #error{codename = EName}} ->
+              {_, {ok, _}} -> ok;
+              {_, {error, #error{codename = EName}}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, EName}
           end,
@@ -161,7 +163,7 @@ save_loc(DevId, Loc, Frame, Internal) ->
 save_frame(DevId, Frame) ->
     Q = "INSERT INTO device_" ++
     binary_to_list(DevId) ++
-    "(id, hex, frame, received) values (" ++
+    "(id, hex, frame, received, dtm) values (" ++
     integer_to_list(Frame#frame.id) ++
     "," ++
     quote(Frame#frame.hex) ++
@@ -169,6 +171,8 @@ save_frame(DevId, Frame) ->
     quote(prepare_frame(Frame)) ++
     "," ++
     quote(nts_utils:time2string((Frame#frame.received))) ++
+    "," ++
+    quote(nts_utils:time2string(nts_frame:get(dtm, Frame))) ++
     ")",
     query(Q).
 
@@ -502,7 +506,6 @@ log_query(Q) ->
         {ok, true} ->
             ?INFO_MSG("QUERY: ~s", [Q]);
         _ ->
-            ?INFO_MSG("QUERY: ~s", [Q]),
             ok
     end.
 

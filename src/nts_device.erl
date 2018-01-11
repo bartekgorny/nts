@@ -336,7 +336,7 @@ maybe_emit_device_up(_, _, #state{up = true} = State) ->
     State;
 maybe_emit_device_up(reproc, _, State) ->
     State;
-maybe_emit_device_up(A, Loc, State) ->
+maybe_emit_device_up(_, Loc, State) ->
     Evt = nts_event:create_event([device, activity, up],
         State#state.devid,
         Loc,

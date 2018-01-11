@@ -413,15 +413,39 @@ rewrite_buffered(_) ->
     nts_device:process_frame(Dev, mkframe(-9, -18, #{ignition => 0})),
     check_ign(?DEVID, Dev, 9, 0),
     nts_device:process_frame(Dev, mkframe(-7, -14)),
-    nts_device:process_frame(Dev, mkframe(-8, -16, #{ignition => 1})),
-    check_ign(?DEVID, Dev, 7, 0), % older frame was ignored
+    nts_device:process_frame(Dev, mkframe(-6, -16, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-6, -20)),
+    check_ign(?DEVID, Dev, 7, 0), % older frames were ignored
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-5, -10)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-4, -8)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-3, -6)),
-    check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '7' frame into account
+    check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '6, -16'
+                                  % frame into account
+    ExpHist = [{6, 20, false, undefined},
+               {9, 18, true, 0},
+               {6, 16, false, 1},
+               {7, 14, true, 1},
+               {5, 10, true, 1},
+               {4, 8, true, 1},
+               {3, 6, true, 1}
+              ],
+    check_rewritten_history(ExpHist,
+                            nts_db:full_history(?DEVID,
+                                                fromnow(-30),
+                                                fromnow(0))),
+%%    almost there, except:
+%%    a) delete throws op_failed
+%%    b) sthg is messed up with #state.up and it generates redundant
+%%       [device, activity, up] event when reprocessing
+    
+    ExpEvts = [
+        {9, 18, [device, activity, up]},
+        {6, 16, [device, sensorchange, ignition]},
+        {3, 6, [device, activity, down]}
+    ],
     ok.
 
 %%%===================================================================
@@ -567,3 +591,18 @@ check_state(ExpLat, ExpIgn, St) ->
     ok.
 
 
+check_rewritten_history([], []) ->
+    ok;
+check_rewritten_history([], _) ->
+    ct:fail("mismatched length");
+check_rewritten_history(_, []) ->
+    ct:fail("mismatched length");
+check_rewritten_history([Exp|ETail], [Act|ActTail]) ->
+    check_match(Exp, Act),
+    check_rewritten_history(ETail, ActTail).
+
+check_match({Lat, Lon, Up, Ign}, {_, Loc}) ->
+    ?assertEqual({Lat, Lon}, nts_location:coords(Loc)),
+    ?assertEqual(Up, nts_location:get(status, up, Loc)),
+    ?assertEqual(Ign, nts_location:get(sensor, ignition, Loc)),
+    ok.
