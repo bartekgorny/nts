@@ -210,16 +210,6 @@ set_timestamps(Frame, NewLoc) ->
             NewLoc2#loc{dtm = Dtm}
     end.
 
-maybe_emit_device_down(#state{up = false} = State) ->
-    State;
-maybe_emit_device_down(State) ->
-    Evt = nts_event:create_event([device, activity, down],
-                                 State#state.devid,
-                                 State#state.loc,
-                                 nts_utils:dtm()),
-    process_events([save, publish], [Evt]),
-    State#state{up = false}.
-
 get_config(Name, State) ->
     case maps:get(Name, State#state.config, undefined) of
         undefined -> nts_config:get_value(Name);
@@ -227,12 +217,8 @@ get_config(Name, State) ->
     end.
 
 update_current_down(DevId, Loc) ->
-    case nts_location:dtm(Loc) of
-        undefined -> ok; % empty state, we don't care
-        _ ->
-            Loc1 = nts_location:set(status, up, false, Loc),
-            nts_db:update_state(DevId, Loc1)
-    end,
+    Loc1 = nts_location:set(status, up, false, Loc),
+    nts_db:update_state(DevId, Loc1),
     ok.
 
 flush_events(new, Internal) ->
@@ -335,7 +321,7 @@ maybe_publish_state(_, _, _) ->
 maybe_emit_device_up(_, _, _, #state{up = true} = State) ->
     State;
 maybe_emit_device_up(reproc, _, _, State) ->
-    State#state{up = true};
+    State;
 maybe_emit_device_up(_, Frame, Loc, State) ->
     Evt = nts_event:create_event([device, activity, up],
                                  State#state.devid,
@@ -344,10 +330,22 @@ maybe_emit_device_up(_, Frame, Loc, State) ->
     process_events([save, publish], [Evt]),
     State#state{up = true}.
 
+maybe_emit_device_down(#state{up = false} = State) ->
+    State;
+maybe_emit_device_down(State) ->
+    Evt = nts_event:create_event([device, activity, down],
+        State#state.devid,
+        State#state.loc,
+        nts_utils:dtm()),
+    process_events([save, publish], [Evt]),
+    State#state{up = false}.
+
 do_reprocess_data(FromDtm, State0) ->
     State = cancel_reproc_timer(State0),
     DevId = devid(State),
-    StartState = initialize_device(DevId, FromDtm),
+    StartState0 = initialize_device(DevId, FromDtm),
+    % we know it is up since it started reprocessing
+    StartState = StartState0#state{up = true},
     nts_db:clear_events(DevId, FromDtm),
     Hist = nts_db:full_history(DevId, FromDtm, nts_utils:dtm()),
     CurrentState = lists:foldl(fun reprocess_record/2, StartState, Hist),

@@ -29,6 +29,8 @@
 
 -type floatstate() :: map().
 
+-type locdata() :: map().
+
 -spec handle_input(frametype(), frame(), loc(), loc(), internal(),
                    nts_device:state()) ->
     {ok, loc(), internal()}.
@@ -56,7 +58,7 @@ newstate() -> #{refloc => undefined, mode => {moving, true}, trail => []}.
 
 %% @doc Receives new location and floatfilter state; returns fixed location (meaning it may have
 %% its coordinates reset to those of the reference location) and modified state.
--spec check_moving(loc(), floatstate()) -> {loc(), floatstate()}.
+-spec check_moving(locdata(), floatstate()) -> {locdata(), floatstate()}.
 check_moving(NewLoc, #{refloc := undefined} = FState) ->
     {NewLoc, FState#{refloc => NewLoc}};
 check_moving(NewLoc, FState) ->
@@ -70,9 +72,9 @@ check_moving(NewLoc, FState) ->
 -spec check_moving(Mode :: floatmode(),
                    IsMove :: boolean(),
                    Trail :: [map()],
-                   NewLoc :: loc(),
+                   NewLoc :: locdata(),
                    FState :: floatstate()) ->
-    {floatmode(), loc(), floatstate()}.
+    {floatmode(), locdata(), floatstate()}.
 check_moving({moving, true}, true, [], NewLoc, FState) ->
     {{moving, true}, NewLoc, FState#{refloc => NewLoc}};
 check_moving({moving, true}, false, [], NewLoc, FState) ->
@@ -130,15 +132,12 @@ decode_state(#{mode := BMode} = FState) ->
 encode_m(M) ->
     atom_to_binary(M, utf8).
 
-decode_m(M) when is_atom(M) ->
-    M;
 decode_m(M) ->
     binary_to_existing_atom(M, utf8).
 
 encode_s(true) -> <<"true">>;
 encode_s(false) -> <<"false">>.
 
-decode_s(A) when is_atom(A) -> A;
 decode_s(<<"true">>) -> true;
 decode_s(<<"false">>) -> false.
 
