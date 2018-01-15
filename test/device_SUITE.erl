@@ -19,8 +19,8 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() ->
-    [rewrite_buffered].
-all(a) ->
+%%    [rewrite_buffered].
+%%all(a) ->
     [
         simple_test,
         internal_state,
@@ -34,7 +34,8 @@ all(a) ->
         sensor_events,
         reprocessing,
         stabiliser,
-        floatfilter
+        floatfilter,
+        rewrite_buffered
     ].
 
 init_per_suite(C) ->
@@ -416,12 +417,15 @@ rewrite_buffered(_) ->
     nts_device:process_frame(Dev, mkframe(-6, -16, #{ignition => 1})),
     nts_device:process_frame(Dev, mkframe(-6, -20)),
     check_ign(?DEVID, Dev, 7, 0), % older frames were ignored
+    [Ev] = flush_device_events(),
+    check_event({9, 18, [device, activity, up]}, Ev),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-5, -10)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-4, -8)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-3, -6)),
+    [] = flush_device_events(),
     check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '6, -16'
                                   % frame into account
     ExpHist = [{6, 20, false, undefined},
@@ -430,22 +434,14 @@ rewrite_buffered(_) ->
                {7, 14, true, 1},
                {5, 10, true, 1},
                {4, 8, true, 1},
-               {3, 6, true, 1}
-              ],
+               {3, 6, true, 1}],
     check_rewritten_history(ExpHist,
                             nts_db:full_history(?DEVID,
                                                 fromnow(-30),
                                                 fromnow(0))),
-%%    almost there, except:
-%%    a) delete throws op_failed
-%%    b) sthg is messed up with #state.up and it generates redundant
-%%       [device, activity, up] event when reprocessing
-    
-    ExpEvts = [
-        {9, 18, [device, activity, up]},
-        {6, 16, [device, sensorchange, ignition]},
-        {3, 6, [device, activity, down]}
-    ],
+    [E1, E2] = nts_db:event_log(?DEVID, [device], fromnow(-30), fromnow(0)),
+    check_event({6, 16, [device, sensorchange, ignition]}, E1),
+    check_event({9, 18, [device, activity, up]}, E2),
     ok.
 
 %%%===================================================================
@@ -606,3 +602,14 @@ check_match({Lat, Lon, Up, Ign}, {_, Loc}) ->
     ?assertEqual(Up, nts_location:get(status, up, Loc)),
     ?assertEqual(Ign, nts_location:get(sensor, ignition, Loc)),
     ok.
+
+check_event({Lat, Lon, EType}, Evt) ->
+    ?assertEqual(Lat, Evt#event.lat),
+    ?assertEqual(Lon, Evt#event.lon),
+    ?assertEqual(EType, Evt#event.type),
+    ok.
+
+flush_device_events() ->
+    Events = event_listener:flush(),
+    [E || {[device|_], E} <- Events].
+

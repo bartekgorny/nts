@@ -29,7 +29,7 @@ query(Q) ->
     Conn = nts_db_conn:get_connection(),
     nts_metrics:up([db, ops]),
     Ret = case {QType, epgsql:squery(Conn, Q)} of
-              {"D", {ok, 0}} -> ok; % deleted 0 rows
+              {$D, {ok, 0}} -> ok; % deleted 0 rows
               {_, {ok, Types, Values}} -> {Types, Values};
               {_, {ok, 0}} ->
                   nts_metrics:up([db, failed_ops]),
@@ -52,6 +52,7 @@ query(Conn, Q) ->
     log_query(Q),
     nts_metrics:up([db, ops]),
     Ret = case epgsql:squery(Conn, Q) of
+              {$D, {ok, 0}} -> ok; % deleted 0 rows
               {ok, Types, Values} -> {Types, Values};
               {ok, 0} ->
                   nts_metrics:up([db, failed_ops]),
@@ -62,8 +63,7 @@ query(Conn, Q) ->
                   {error, EName}
           end,
     case Ret of
-        {error, E} ->
-            ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]),
+        {error, _} ->
             throw(stop_that_transaction);
         _ ->
             ok
@@ -398,6 +398,7 @@ update_device(DevId, Config) ->
 
 %% helpers
 
+quote(null) -> null;
 quote(S) when is_atom(S) ->
     quote(atom_to_list(S));
 quote(S) when is_binary(S) ->
