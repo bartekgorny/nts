@@ -293,7 +293,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
             NewLocation1 = set_timestamps(Frame, NewLocation0),
             % do not change internal state as it might be corrupt
             NewState0 = State#state{loc = NewLocation1},
-            NewState = maybe_emit_device_up(Origin, OldLocation, NewState0),
+            NewState = maybe_emit_device_up(Origin, Frame, OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Frame, State#state.internaldata]),
@@ -301,7 +301,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
             NewState;
         {NewLocation0, NewInternal} ->
             NewLocation = maybe_set_status_up(Origin, OrigLoc, NewLocation0),
-            NewState0 = maybe_emit_device_up(Origin, NewLocation, State),
+            NewState0 = maybe_emit_device_up(Origin, Frame, NewLocation, State),
             % save and possibly publish events created by handlers
             NewInternal1 = flush_events(Origin, NewInternal),
             % save frame and location and publish state
@@ -332,15 +332,15 @@ maybe_publish_state(_, _, _) ->
 
 %% @doc we do it once, after receiving frame, using either new location (before saving in case
 %% it crashes), or old one if loc processing errored out
-maybe_emit_device_up(_, _, #state{up = true} = State) ->
+maybe_emit_device_up(_, _, _, #state{up = true} = State) ->
     State;
-maybe_emit_device_up(reproc, _, State) ->
-    State;
-maybe_emit_device_up(_, Loc, State) ->
+maybe_emit_device_up(reproc, _, _, State) ->
+    State#state{up = true};
+maybe_emit_device_up(_, Frame, Loc, State) ->
     Evt = nts_event:create_event([device, activity, up],
-        State#state.devid,
-        Loc,
-        nts_utils:dtm()),
+                                 State#state.devid,
+                                 Loc,
+                                 Frame#frame.received),
     process_events([save, publish], [Evt]),
     State#state{up = true}.
 
