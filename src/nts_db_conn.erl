@@ -118,7 +118,7 @@ cleanup(#state{connection = Conn}) ->
     disconnect(Conn).
 
 connect() ->
-    {ok, ConnData} = application:get_env(postgres, conn_data),
+    {ok, ConnData} = application:get_env(nts, postgres_conn_data),
     {ok, Conn} = epgsql:connect(ConnData),
     Conn.
 
