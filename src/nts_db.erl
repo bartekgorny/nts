@@ -505,7 +505,7 @@ bin2bool(<<"t">>) -> true;
 bin2bool(<<"f">>) -> false.
 
 log_query(Q) ->
-    case application:get_env(postgres, log_queries) of
+    case application:get_env(nts, log_queries) of
         {ok, true} ->
             ?INFO_MSG("QUERY: ~s", [Q]);
         _ ->

@@ -31,7 +31,7 @@
                         config :: map(), up :: boolean(), reproc_timer :: any()}.
 
 %% API
--export([start_link/1, stop/1]).
+-export([start_link/1, start_link/2, stop/1]).
 
 %% gen_statem callbacks
 -export([init/1,
@@ -61,7 +61,10 @@
 %%--------------------------------------------------------------------
 -spec(start_link(devid()) -> {ok, pid()} | ignore | {error, Reason :: term()}).
 start_link(DevId) ->
-    gen_statem:start_link({global, DevId}, ?MODULE, [DevId], []).
+    start_link(DevId, undefined).
+
+start_link(DevId, Connector) ->
+    gen_statem:start_link({global, DevId}, ?MODULE, [DevId, Connector], []).
 
 stop(Pid) ->
     gen_statem:stop(Pid).
@@ -125,7 +128,12 @@ reprocess_data(Dev, From) ->
 %%% gen_statem
 %%%===================================================================
 
-init([DevId]) ->
+init([DevId, Connection]) ->
+    case Connection of
+        undefined -> ok;
+        Pid when is_pid(Pid) ->
+            link(Pid) % to terminate if connector crashes
+    end,
     process_flag(trap_exit, true),
     State = initialize_device(DevId),
     {ok, normal, State}.
@@ -217,9 +225,13 @@ get_config(Name, State) ->
     end.
 
 update_current_down(DevId, Loc) ->
-    Loc1 = nts_location:set(status, up, false, Loc),
-    nts_db:update_state(DevId, Loc1),
-    ok.
+    case nts_location:get(status, up, Loc) of
+        true ->
+            Loc1 = nts_location:set(status, up, false, Loc),
+            nts_db:update_state(DevId, Loc1);
+        _ ->
+            ok
+    end.
 
 flush_events(new, Internal) ->
     flush_events([save, publish], Internal);

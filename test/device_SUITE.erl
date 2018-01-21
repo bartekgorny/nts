@@ -19,7 +19,7 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() ->
-%%    [rewrite_buffered].
+%%    [idle_timeout].
 %%all(a) ->
     [
         simple_test,

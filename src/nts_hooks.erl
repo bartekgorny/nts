@@ -47,7 +47,7 @@ run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, Internal, State) -
                   [{_, HSection}] -> HSection
               end,
     Handlers = case proplists:get_value(DeviceType, Section) of
-                   undefined -> proplists:get_value(generic, Section);
+                   undefined -> proplists:get_value(generic, Section, []);
                    Lst -> Lst
                end,
     run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc, 
