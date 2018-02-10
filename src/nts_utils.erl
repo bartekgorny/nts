@@ -60,6 +60,8 @@ h2i(H) ->
 json_encode_map(Data) ->
     jiffy:encode(cookmap(Data)).
 
+json_decode_map(null) ->
+    #{};
 json_decode_map(<<"">>) ->
     #{};
 json_decode_map(Data) ->
@@ -113,7 +115,9 @@ ew_table() ->
      {75, 28.902},
      {90, 0.000}].
 
--spec time2string(datetime()) -> string().
+-spec time2string(datetime() | undefined) -> string().
+time2string(undefined) ->
+    "";
 time2string(T) ->
     {{Y, M, D}, {H, Mi, S}} = T,
     lists:flatten(io_lib:format("~p-~p-~p ~p:~p:~p", [Y, M, D, H, Mi, S])).

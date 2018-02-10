@@ -31,7 +31,7 @@
                         config :: map(), up :: boolean(), reproc_timer :: any()}.
 
 %% API
--export([start_link/1, stop/1]).
+-export([start_link/1, start_link/2, stop/1]).
 
 %% gen_statem callbacks
 -export([init/1,
@@ -61,7 +61,10 @@
 %%--------------------------------------------------------------------
 -spec(start_link(devid()) -> {ok, pid()} | ignore | {error, Reason :: term()}).
 start_link(DevId) ->
-    gen_statem:start_link({global, DevId}, ?MODULE, [DevId], []).
+    start_link(DevId, undefined).
+
+start_link(DevId, Connector) ->
+    gen_statem:start_link({global, DevId}, ?MODULE, [DevId, Connector], []).
 
 stop(Pid) ->
     gen_statem:stop(Pid).
@@ -125,20 +128,17 @@ reprocess_data(Dev, From) ->
 %%% gen_statem
 %%%===================================================================
 
-init([DevId]) ->
+init([DevId, Connection]) ->
+    case Connection of
+        undefined -> ok;
+        Pid when is_pid(Pid) ->
+            link(Pid) % to terminate if connector crashes
+    end,
     process_flag(trap_exit, true),
     State = initialize_device(DevId),
     {ok, normal, State}.
 
 callback_mode() -> [state_functions].
-
-% note: it does not make much sense. If we reprocess data, we should come up with exactly
-% the same result, whether we use old status or not. The only difference is in 'up/down'
-% but it is trivial: if frame was fresh then device was up, if it was buffered then it
-% was down at that time, end of story. The reproc stuff can then be simplified.
-%
-% we have to either flag a frame in db as buffered or just compared received with dtm
-% the we know immediately
 
 normal({call, From}, {reprocess_data, FromDtm}, State) ->
     NextState = do_reprocess_data(FromDtm, State),
@@ -218,16 +218,6 @@ set_timestamps(Frame, NewLoc) ->
             NewLoc2#loc{dtm = Dtm}
     end.
 
-maybe_emit_device_down(#state{up = false} = State) ->
-    State;
-maybe_emit_device_down(State) ->
-    Evt = nts_event:create_event([device, activity, down],
-                                 State#state.devid,
-                                 State#state.loc,
-                                 nts_utils:dtm()),
-    process_events([save, publish], [Evt]),
-    State#state{up = false}.
-
 get_config(Name, State) ->
     case maps:get(Name, State#state.config, undefined) of
         undefined -> nts_config:get_value(Name);
@@ -235,13 +225,13 @@ get_config(Name, State) ->
     end.
 
 update_current_down(DevId, Loc) ->
-    case nts_location:dtm(Loc) of
-        undefined -> ok; % empty state, we don't care
-        _ ->
+    case nts_location:get(status, up, Loc) of
+        true ->
             Loc1 = nts_location:set(status, up, false, Loc),
-            nts_db:update_state(DevId, Loc1)
-    end,
-    ok.
+            nts_db:update_state(DevId, Loc1);
+        _ ->
+            ok
+    end.
 
 flush_events(new, Internal) ->
     flush_events([save, publish], Internal);
@@ -301,7 +291,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
             NewLocation1 = set_timestamps(Frame, NewLocation0),
             % do not change internal state as it might be corrupt
             NewState0 = State#state{loc = NewLocation1},
-            NewState = maybe_emit_device_up(Origin, OldLocation, NewState0),
+            NewState = maybe_emit_device_up(Origin, Frame, OldLocation, NewState0),
             % save frame & location and publish
             nts_hooks:run(save_state, [], [State#state.devid, NewLocation,
                                            Frame, State#state.internaldata]),
@@ -309,7 +299,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
             NewState;
         {NewLocation0, NewInternal} ->
             NewLocation = maybe_set_status_up(Origin, OrigLoc, NewLocation0),
-            NewState0 = maybe_emit_device_up(Origin, NewLocation, State),
+            NewState0 = maybe_emit_device_up(Origin, Frame, NewLocation, State),
             % save and possibly publish events created by handlers
             NewInternal1 = flush_events(Origin, NewInternal),
             % save frame and location and publish state
@@ -340,22 +330,34 @@ maybe_publish_state(_, _, _) ->
 
 %% @doc we do it once, after receiving frame, using either new location (before saving in case
 %% it crashes), or old one if loc processing errored out
-maybe_emit_device_up(_, _, #state{up = true} = State) ->
+maybe_emit_device_up(_, _, _, #state{up = true} = State) ->
     State;
-maybe_emit_device_up(reproc, _, State) ->
+maybe_emit_device_up(reproc, _, _, State) ->
     State;
-maybe_emit_device_up(_, Loc, State) ->
+maybe_emit_device_up(_, Frame, Loc, State) ->
     Evt = nts_event:create_event([device, activity, up],
-        State#state.devid,
-        Loc,
-        nts_utils:dtm()),
+                                 State#state.devid,
+                                 Loc,
+                                 Frame#frame.received),
     process_events([save, publish], [Evt]),
     State#state{up = true}.
+
+maybe_emit_device_down(#state{up = false} = State) ->
+    State;
+maybe_emit_device_down(State) ->
+    Evt = nts_event:create_event([device, activity, down],
+        State#state.devid,
+        State#state.loc,
+        nts_utils:dtm()),
+    process_events([save, publish], [Evt]),
+    State#state{up = false}.
 
 do_reprocess_data(FromDtm, State0) ->
     State = cancel_reproc_timer(State0),
     DevId = devid(State),
-    StartState = initialize_device(DevId, FromDtm),
+    StartState0 = initialize_device(DevId, FromDtm),
+    % we know it is up since it started reprocessing
+    StartState = StartState0#state{up = true},
     nts_db:clear_events(DevId, FromDtm),
     Hist = nts_db:full_history(DevId, FromDtm, nts_utils:dtm()),
     CurrentState = lists:foldl(fun reprocess_record/2, StartState, Hist),
@@ -365,7 +367,8 @@ do_reprocess_data(FromDtm, State0) ->
     CurrentState.
 
 reprocess_record({Fr, Loc}, State) ->
-    Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data, Fr#frame.received),
+    Frame = nts_frame:parse(State#state.device_type, Fr#frame.id, Fr#frame.data,
+                            Fr#frame.received),
     do_process_frame(reproc, Loc, Frame, State).
 
 get_up_status(Loc) ->
@@ -376,7 +379,7 @@ get_up_status(Loc) ->
 
 start_reproc_timer(Dtm, #state{reproc_timer = undefined} = State) ->
     TVal = get_config(rewrite_history_timeout, State),
-    Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_buffer, [self(), Dtm]),
+    Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_data, [self(), Dtm]),
     State#state{reproc_timer = Timer};
 start_reproc_timer(Dtm, State) ->
     start_reproc_timer(Dtm, cancel_reproc_timer(State)).

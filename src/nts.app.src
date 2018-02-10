@@ -1,11 +1,12 @@
 {application, nts,
- [{description, "An OTP application"},
+ [{description, "New Track System"},
   {vsn, "0.1.0"},
   {registered, []},
   {mod, { nts_app, []}},
   {applications,
    [exometer,
     jiffy,
+    epgsql,
     kernel,
     lager,
     stdlib

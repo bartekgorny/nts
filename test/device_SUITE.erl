@@ -18,9 +18,9 @@
 
 -import(nts_helpers, [fromnow/1]).
 
-all() -> 
-    [rewrite_buffered].
-all(a) ->
+all() ->
+%%    [idle_timeout].
+%%all(a) ->
     [
         simple_test,
         internal_state,
@@ -34,7 +34,8 @@ all(a) ->
         sensor_events,
         reprocessing,
         stabiliser,
-        floatfilter
+        floatfilter,
+        rewrite_buffered
     ].
 
 init_per_suite(C) ->
@@ -208,14 +209,14 @@ mapping(_) ->
     Sensors1 = #{sensor_a => undefined,
                  sensor_b => undefined,
                  sensor_c => undefined},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    nts_device:process_frame(Dev, mkframe(-9, -18, Sensors1)),
     check_sensors(Dev, #{sensor_a => 0,
                          sensor_b => 4,
                          sensor_c => 4}),
     Sensors2 = #{sensor_a => 0,
                  sensor_b => 0,
                  sensor_c => 0},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors2)),
+    nts_device:process_frame(Dev, mkframe(-8, -16, Sensors2)),
     check_sensors(Dev, #{sensor_a => 0,
                          sensor_b => 0,
                          sensor_c => 4}),
@@ -231,14 +232,14 @@ mapping_custom(_) ->
     Sensors0 = #{input_1 => 4,
                  input_2 => 4,
                  sensor_c => 4},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors0)),
+    nts_device:process_frame(Dev, mkframe(-12, -22, Sensors0)),
     check_sensors(Dev, #{sensor_a => 4,
                          sensor_b => 4,
                          sensor_c => 4}),
     Sensors1 = #{input_1 => undefined,
                  input_2 => undefined,
                  sensor_c => undefined},
-    nts_device:process_frame(Dev, mkframe(-10, -20, Sensors1)),
+    nts_device:process_frame(Dev, mkframe(-11, -21, Sensors1)),
     check_sensors(Dev, #{sensor_a => 4,
                          sensor_b => 4,
                          sensor_c => 0}),
@@ -413,15 +414,34 @@ rewrite_buffered(_) ->
     nts_device:process_frame(Dev, mkframe(-9, -18, #{ignition => 0})),
     check_ign(?DEVID, Dev, 9, 0),
     nts_device:process_frame(Dev, mkframe(-7, -14)),
-    nts_device:process_frame(Dev, mkframe(-8, -16, #{ignition => 1})),
-    check_ign(?DEVID, Dev, 7, 0), % older frame was ignored
+    nts_device:process_frame(Dev, mkframe(-6, -16, #{ignition => 1})),
+    nts_device:process_frame(Dev, mkframe(-6, -20)),
+    check_ign(?DEVID, Dev, 7, 0), % older frames were ignored
+    [Ev] = flush_device_events(),
+    check_event({9, 18, [device, activity, up]}, Ev),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-5, -10)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-4, -8)),
     timer:sleep(1000),
     nts_device:process_frame(Dev, mkframe(-3, -6)),
-    check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '7' frame into account
+    [] = flush_device_events(),
+    check_ign(?DEVID, Dev, 3, 1), % rewrote history and took the '6, -16'
+                                  % frame into account
+    ExpHist = [{6, 20, false, undefined},
+               {9, 18, true, 0},
+               {6, 16, false, 1},
+               {7, 14, true, 1},
+               {5, 10, true, 1},
+               {4, 8, true, 1},
+               {3, 6, true, 1}],
+    check_rewritten_history(ExpHist,
+                            nts_db:full_history(?DEVID,
+                                                fromnow(-30),
+                                                fromnow(0))),
+    [E1, E2] = nts_db:event_log(?DEVID, [device], fromnow(-30), fromnow(0)),
+    check_event({6, 16, [device, sensorchange, ignition]}, E1),
+    check_event({9, 18, [device, activity, up]}, E2),
     ok.
 
 %%%===================================================================
@@ -566,4 +586,30 @@ check_state(ExpLat, ExpIgn, St) ->
     ?assertEqual(ExpIgn, nts_location:get(sensor, ignition, St)),
     ok.
 
+
+check_rewritten_history([], []) ->
+    ok;
+check_rewritten_history([], _) ->
+    ct:fail("mismatched length");
+check_rewritten_history(_, []) ->
+    ct:fail("mismatched length");
+check_rewritten_history([Exp|ETail], [Act|ActTail]) ->
+    check_match(Exp, Act),
+    check_rewritten_history(ETail, ActTail).
+
+check_match({Lat, Lon, Up, Ign}, {_, Loc}) ->
+    ?assertEqual({Lat, Lon}, nts_location:coords(Loc)),
+    ?assertEqual(Up, nts_location:get(status, up, Loc)),
+    ?assertEqual(Ign, nts_location:get(sensor, ignition, Loc)),
+    ok.
+
+check_event({Lat, Lon, EType}, Evt) ->
+    ?assertEqual(Lat, Evt#event.lat),
+    ?assertEqual(Lon, Evt#event.lon),
+    ?assertEqual(EType, Evt#event.type),
+    ok.
+
+flush_device_events() ->
+    Events = event_listener:flush(),
+    [E || {[device|_], E} <- Events].
 

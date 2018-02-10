@@ -16,3 +16,4 @@ v deploying devices
 v datetime "almost equal"
 v refactor reprocessing to bring it closer to the main impl, otherwise I'll get nuts
 - indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne do floatfiltra)
+- zrefaktorować event handlery (te do system_bus)

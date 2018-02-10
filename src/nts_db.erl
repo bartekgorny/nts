@@ -25,15 +25,17 @@
 
 query(Q) ->
     log_query(Q),
+    QType = hd(Q),
     Conn = nts_db_conn:get_connection(),
     nts_metrics:up([db, ops]),
-    Ret = case epgsql:squery(Conn, Q) of
-              {ok, Types, Values} -> {Types, Values};
-              {ok, 0} ->
+    Ret = case {QType, epgsql:squery(Conn, Q)} of
+              {$D, {ok, 0}} -> ok; % deleted 0 rows
+              {_, {ok, Types, Values}} -> {Types, Values};
+              {_, {ok, 0}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, op_failed};
-              {ok, _} -> ok;
-              {error, #error{codename = EName}} ->
+              {_, {ok, _}} -> ok;
+              {_, {error, #error{codename = EName}}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, EName}
           end,
@@ -50,6 +52,7 @@ query(Conn, Q) ->
     log_query(Q),
     nts_metrics:up([db, ops]),
     Ret = case epgsql:squery(Conn, Q) of
+              {$D, {ok, 0}} -> ok; % deleted 0 rows
               {ok, Types, Values} -> {Types, Values};
               {ok, 0} ->
                   nts_metrics:up([db, failed_ops]),
@@ -60,8 +63,7 @@ query(Conn, Q) ->
                   {error, EName}
           end,
     case Ret of
-        {error, E} ->
-            ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]),
+        {error, _} ->
             throw(stop_that_transaction);
         _ ->
             ok
@@ -161,7 +163,7 @@ save_loc(DevId, Loc, Frame, Internal) ->
 save_frame(DevId, Frame) ->
     Q = "INSERT INTO device_" ++
     binary_to_list(DevId) ++
-    "(id, hex, frame, received) values (" ++
+    "(id, hex, frame, received, dtm) values (" ++
     integer_to_list(Frame#frame.id) ++
     "," ++
     quote(Frame#frame.hex) ++
@@ -169,6 +171,8 @@ save_frame(DevId, Frame) ->
     quote(prepare_frame(Frame)) ++
     "," ++
     quote(nts_utils:time2string((Frame#frame.received))) ++
+    "," ++
+    quote(nts_utils:time2string(nts_frame:get(dtm, Frame))) ++
     ")",
     query(Q).
 
@@ -260,7 +264,9 @@ last_loc(DevId, Dtm) ->
 last_loc(DevId) ->
     get_last_loc(DevId, "id, dtm, coords, data").
 
--spec last_state(devid(), datetime()) -> {loc(), internal()} | {error, atom()}.
+-spec last_state(devid(), datetime()) -> {loc(), internal()}
+                                         | undefined
+                                         | {error, atom()}.
 last_state(DevId, Dtm) ->
     get_last_loc(DevId, Dtm, "id, dtm, coords, data, internal").
 
@@ -394,6 +400,7 @@ update_device(DevId, Config) ->
 
 %% helpers
 
+quote(null) -> null;
 quote(S) when is_atom(S) ->
     quote(atom_to_list(S));
 quote(S) when is_binary(S) ->
@@ -427,7 +434,9 @@ parse_loc({BId, D, Coords, BData, BInternal}) ->
 parse_state({DevId, D, Coords, BData}) ->
     {DevId, parse_loc({<<"0">>, D, Coords, BData})}.
 
--spec parse_binary_coords(binary()) -> {float(), float()}.
+-spec parse_binary_coords(binary() | null) -> {float(), float()} | undefined.
+parse_binary_coords(null) ->
+    {0, 0};
 parse_binary_coords(Coords) ->
     [A, O] = binary:split(Coords, <<$,>>),
     Lat = list_to_arith(tl(binary_to_list(A))),
@@ -445,7 +454,9 @@ parse_binary_coords(Coords) ->
 encode_coords(Lat, Lon) ->
     io_lib:format("(~p, ~p)", [Lat, Lon]).
 
--spec parse_binary_datetime(binary()) -> datetime().
+-spec parse_binary_datetime(binary() | null) -> datetime() | undefined.
+parse_binary_datetime(null) ->
+    undefined;
 parse_binary_datetime(R) ->
     L = binary:bin_to_list(R),
     Y = extract_int(L, 1, 4),
@@ -494,7 +505,7 @@ bin2bool(<<"t">>) -> true;
 bin2bool(<<"f">>) -> false.
 
 log_query(Q) ->
-    case application:get_env(postgres, log_queries) of
+    case application:get_env(nts, log_queries) of
         {ok, true} ->
             ?INFO_MSG("QUERY: ~s", [Q]);
         _ ->

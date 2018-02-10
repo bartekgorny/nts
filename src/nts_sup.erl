@@ -36,7 +36,10 @@ init([]) ->
                start => {nts_config, start_link,[]}},
     Hooks = #{id => hook_manager,
               start => {nts_hooks, start_link,[]}},
-    Children = [SysBus, Config, DbConnector, Hooks],
+    Tcp = #{id => tcp_listener,
+            type => supervisor,
+            start => {nts_tcp_sup, start_link, []}},
+    Children = [SysBus, Config, DbConnector, Hooks, Tcp],
     {ok, { {one_for_one, 2, 20}, Children} }.
 
 %%====================================================================
