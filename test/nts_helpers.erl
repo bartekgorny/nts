@@ -14,6 +14,7 @@
 -export([get_priv_files/0, fromnow/1]).
 -export([compare_near_dates/2, compare_near_dates/3]).
 -export([add_handler/1, remove_handler/1, add_handler/2, remove_handler/2]).
+-export([trace_funcs/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("nts/src/nts.hrl").
@@ -73,3 +74,15 @@ remove_handler(Hook, Handler) ->
 
 remove_handler({Hook, Handler}) ->
     nts_hooks:remove_handler(Hook, Handler).
+
+trace_funcs(ToTrace) ->
+    ModReload = lists:map(fun({M, _}) -> code:ensure_loaded(M) end, ToTrace),
+    [module = M || {M, _} <- ModReload],
+    CallSpec = [{M, F, [{'_', [], [{return_trace}]}]} || {M, F} <- ToTrace],
+    {ok, Dev} = file:open("/tmp/trace", [write]),
+    R = recon_trace:calls(CallSpec,
+        100,
+        [{io_server, Dev}, {scope, local}]),
+    ct:pal("Spec: ~p, tracing: ~p", [length(ToTrace), R]),
+    ct:pal("Tracing: ~p", [ToTrace]),
+    ok.
