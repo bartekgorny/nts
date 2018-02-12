@@ -23,8 +23,6 @@
     terminate/2,
     code_change/3]).
 
--export([listener/2]).
-
 -define(SERVER, ?MODULE).
 
 -record(state, {dtype, port}).
@@ -140,35 +138,35 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 start_listener(DType, Port) ->
-    Opts = [{active, true}, binary, {port, Port}, {packet, raw}, {reuseaddr, true}],
+    Opts = [{active, true}, binary, {reuseaddr, true}],
     case gen_tcp:listen(Port, Opts) of
         {ok, ListenSocket} ->
-            spawn_link(?MODULE, listener, [ListenSocket, DType]),
+            spawn(fun() -> accept(ListenSocket, DType) end),
             ok;
         E ->
             E
     end.
 
-listener(LS, DType) ->
+accept(LS, DType) ->
     case gen_tcp:accept(LS) of
-        {ok,S} ->
-            server(S, DType),
-            listener(LS, DType);
+        {ok, S} ->
+            spawn(fun() -> accept(LS, DType) end),
+            server(S, DType);
         Other ->
-            io:format("accept returned ~w - goodbye!~n",[Other]),
+            ?ERROR_MSG("accept returned ~w - goodbye!~n",[Other]),
             ok
     end.
 
-server(ListenSocket, DType) ->
-    server(ListenSocket, DType, <<"">>, undefined, undefined).
+server(Socket, DType) ->
+    server(Socket, DType, <<"">>, undefined, undefined).
 
-server(ListenSocket, DType, Buffer, DevId, Dev) ->
+server(Socket, DType, Buffer, DevId, Dev) ->
     receive
         {tcp, _, Data} ->
             Frame = nts_frame:parse(DType, Data),
             {DeviceId, Device} = get_device(DevId, Frame#frame.device, Dev),
             maybe_process_frame(Device, Frame),
-            server(ListenSocket, DType, Buffer, DeviceId, Device);
+            server(Socket, DType, Buffer, DeviceId, Device);
         {tcp_closed, _} ->
             stop_device(Dev),
             ok;
