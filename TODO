@@ -6,7 +6,7 @@ v get fresh loc on dev startup
 v save loc
 - eventologia
 v mappingi
-- reprocessing data (also with failure)
+v reprocessing data (also with failure)
 v deploying devices
 - changing mapping should reset device state and be stored in location so that we do same
   when reprocessing (otherwise old mapping result would stay there forever)
@@ -15,5 +15,6 @@ v deploying devices
 - kalibracja
 v datetime "almost equal"
 v refactor reprocessing to bring it closer to the main impl, otherwise I'll get nuts
-- indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne do floatfiltra)
+v indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne do floatfiltra)
 - zrefaktorować event handlery (te do system_bus)
+- ranch acceptor pool

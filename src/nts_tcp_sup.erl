@@ -20,6 +20,9 @@
 
 -export([reload/0]).
 
+%%% for tests
+-export([terminate_listeners/0]).
+
 -define(SERVER, ?MODULE).
 
 %%%===================================================================
