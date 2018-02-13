@@ -22,7 +22,8 @@ all() ->
 %%    [].
 %%all(a) ->
     [
-        connect
+        connect_and_disconnect,
+        connect_and_terminate
     ].
 
 init_per_suite(C) ->
@@ -52,18 +53,45 @@ end_per_suite(_Config) ->
 %%%===================================================================
 
 
-connect(_) ->
-    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
-    {ok, Socket} = gen_tcp:connect("localhost", 12345, []),
-    Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
-    gen_tcp:send(Socket, Frame1),
-    timer:sleep(100),
+connect_and_disconnect(_) ->
+    Socket = start_device(),
     Dev = global:whereis_name(?DEVID),
     State = nts_device:getstate(Dev),
     #loc{} = State,
     gen_tcp:close(Socket),
     timer:sleep(100),
     undefined = global:whereis_name(?DEVID),
+    Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(10)),
+    ct:pal("Res: ~p", [Res]),
+    [E0, E1] = Res,
+    ?assertEqual([device, activity, up], E0#event.type),
+    ?assertEqual([device, activity, down], E1#event.type),
     ok.
 
+connect_and_terminate(_) ->
+    Socket = start_device(),
+%%    Dev = global:whereis_name(?DEVID),
+    %% if we stop listener...
+    nts_tcp_sup:terminate_listeners(),
+    timer:sleep(100),
+    undefined = global:whereis_name(?DEVID),
+    %% then connection is closed
+    {error, closed} = gen_tcp:send(Socket, <<"asfdd">>),
+    %% and there is no acceptor
+    {error, econnrefused} = gen_tcp:connect("localhost", 12345, []),
+    ok.
+
+
+%%%===================================================================
+%%% helpers
+%%%===================================================================
+
+
+start_device() ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Socket} = gen_tcp:connect("localhost", 12345, []),
+    Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
+    gen_tcp:send(Socket, Frame1),
+    timer:sleep(100),
+    Socket.
 

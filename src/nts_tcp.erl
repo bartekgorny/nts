@@ -141,16 +141,17 @@ start_listener(DType, Port) ->
     Opts = [{active, true}, binary, {reuseaddr, true}],
     case gen_tcp:listen(Port, Opts) of
         {ok, ListenSocket} ->
-            spawn(fun() -> accept(ListenSocket, DType) end),
+            spawn(fun() -> accept(ListenSocket, DType, self()) end),
             ok;
         E ->
             E
     end.
 
-accept(LS, DType) ->
+accept(LS, DType, Listener) ->
+    monitor(process, Listener),
     case gen_tcp:accept(LS) of
         {ok, S} ->
-            spawn(fun() -> accept(LS, DType) end),
+            spawn(fun() -> accept(LS, DType, Listener) end),
             server(S, DType);
         Other ->
             ?ERROR_MSG("accept returned ~w - goodbye!~n",[Other]),
@@ -169,6 +170,8 @@ server(Socket, DType, Buffer, DevId, Dev) ->
             server(Socket, DType, Buffer, DeviceId, Device);
         {tcp_closed, _} ->
             stop_device(Dev),
+            ok;
+        {'DOWN', _, _, _, normal} ->
             ok;
         E ->
             ?ERROR_MSG("TCP connector terminated:~n~p~n~n", [E]),
