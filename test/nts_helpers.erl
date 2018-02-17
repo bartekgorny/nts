@@ -75,14 +75,18 @@ remove_handler(Hook, Handler) ->
 remove_handler({Hook, Handler}) ->
     nts_hooks:remove_handler(Hook, Handler).
 
+trace_funcs([]) -> ok;
 trace_funcs(ToTrace) ->
     ModReload = lists:map(fun({M, _}) -> code:ensure_loaded(M) end, ToTrace),
     [module = M || {M, _} <- ModReload],
     CallSpec = [{M, F, [{'_', [], [{return_trace}]}]} || {M, F} <- ToTrace],
-    {ok, Dev} = file:open("/tmp/trace", [write]),
+    {ok, Dev} = file:open("/tmp/trace", [append]),
+    file:write(Dev, <<"\n\n">>),
+    file:write(Dev, <<"========================================================================">>),
+    file:write(Dev, <<"\n\n">>),
     R = recon_trace:calls(CallSpec,
-        100,
-        [{io_server, Dev}, {scope, local}]),
+                          100,
+                          [{io_server, Dev}, {scope, local}]),
     ct:pal("Spec: ~p, tracing: ~p", [length(ToTrace), R]),
     ct:pal("Tracing: ~p", [ToTrace]),
     ok.

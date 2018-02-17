@@ -175,6 +175,8 @@ handle_event({call, From}, reset_internal_state, _StateName, State) ->
     {keep_state, NState, [{reply, From, ok}]};
 handle_event({call, From}, _Event, _StateName, _State) ->
     {keep_state_and_data, [{reply, From, ok}]};
+handle_event(info, {'EXIT', _Proc, Reason}, _StateName, _State) ->
+    {stop, Reason};
 handle_event(_, _Event, _StateName, _State) ->
     keep_state_and_data.
 
@@ -379,7 +381,7 @@ get_up_status(Loc) ->
 
 start_reproc_timer(Dtm, #state{reproc_timer = undefined} = State) ->
     TVal = get_config(rewrite_history_timeout, State),
-    Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_data, [self(), Dtm]),
+    {ok, Timer} = timer:apply_after(TVal * 1000, ?MODULE, reprocess_data, [self(), Dtm]),
     State#state{reproc_timer = Timer};
 start_reproc_timer(Dtm, State) ->
     start_reproc_timer(Dtm, cancel_reproc_timer(State)).
