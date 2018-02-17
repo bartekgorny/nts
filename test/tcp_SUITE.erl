@@ -22,8 +22,9 @@ all() ->
 %%    [].
 %%all(a) ->
     [
-        connect_and_disconnect,
-        connect_and_terminate
+        connect_and_disconnect
+%%        connect_and_terminate,
+%%        connect_and_stop
     ].
 
 init_per_suite(C) ->
@@ -54,23 +55,28 @@ end_per_suite(_Config) ->
 
 
 connect_and_disconnect(_) ->
+    % closing connection terminates device
     Socket = start_device(),
     Dev = global:whereis_name(?DEVID),
-    State = nts_device:getstate(Dev),
-    #loc{} = State,
-    gen_tcp:close(Socket),
-    timer:sleep(100),
-    undefined = global:whereis_name(?DEVID),
-    Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(10)),
-    ct:pal("Res: ~p", [Res]),
-    [E0, E1] = Res,
-    ?assertEqual([device, activity, up], E0#event.type),
-    ?assertEqual([device, activity, down], E1#event.type),
+    ct:pal("Dev: ~p", [Dev]),
+
+
+    1 = ?DEVID,
     ok.
+%%    State = nts_device:getstate(Dev),
+%%    #loc{} = State,
+%%    gen_tcp:close(Socket),
+%%    timer:sleep(100),
+%%    undefined = global:whereis_name(?DEVID),
+%%    check_event_log(),
+%%    ok.
 
 connect_and_terminate(_) ->
+    % shutting down listener closes connections and
+    % acceptors and terminates devices
     Socket = start_device(),
-%%    Dev = global:whereis_name(?DEVID),
+    Dev = global:whereis_name(?DEVID),
+    ct:pal("Dev: ~p", [Dev]),
     %% if we stop listener...
     nts_tcp_sup:terminate_listeners(),
     timer:sleep(100),
@@ -79,6 +85,17 @@ connect_and_terminate(_) ->
     {error, closed} = gen_tcp:send(Socket, <<"asfdd">>),
     %% and there is no acceptor
     {error, econnrefused} = gen_tcp:connect("localhost", 12345, []),
+    check_event_log(),
+    nts_tcp_sup:reload(),
+    ok.
+
+connect_and_stop(_) ->
+    % stopping or exiting device terminates connection
+    Socket = start_device(),
+    Dev = global:whereis_name(?DEVID),
+    exit(Dev, forced),
+    Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
+    {error, closed} = gen_tcp:send(Socket, Frame1),
     ok.
 
 
@@ -91,7 +108,14 @@ start_device() ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Socket} = gen_tcp:connect("localhost", 12345, []),
     Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
-    gen_tcp:send(Socket, Frame1),
+    Res = gen_tcp:send(Socket, Frame1),
+    ct:pal("Res: ~p", [Res]),
     timer:sleep(100),
     Socket.
 
+check_event_log() ->
+    Res = nts_db:event_log(?DEVID, [device, activity], fromnow(-10), fromnow(10)),
+    [E0, E1] = Res,
+    ?assertEqual([device, activity, up], E0#event.type),
+    ?assertEqual([device, activity, down], E1#event.type),
+    ok.

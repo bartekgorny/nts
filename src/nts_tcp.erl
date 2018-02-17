@@ -141,7 +141,8 @@ start_listener(DType, Port) ->
     Opts = [{active, true}, binary, {reuseaddr, true}],
     case gen_tcp:listen(Port, Opts) of
         {ok, ListenSocket} ->
-            spawn(fun() -> accept(ListenSocket, DType, self()) end),
+            S = self(),
+            spawn(fun() -> accept(ListenSocket, DType, S) end),
             ok;
         E ->
             E
@@ -164,6 +165,7 @@ server(Socket, DType) ->
 server(Socket, DType, Buffer, DevId, Dev) ->
     receive
         {tcp, _, Data} ->
+            ct:pal("Data: ~p", [Data]),
             Frame = nts_frame:parse(DType, Data),
             {DeviceId, Device} = get_device(DevId, Frame#frame.device, Dev),
             maybe_process_frame(Device, Frame),
@@ -171,7 +173,8 @@ server(Socket, DType, Buffer, DevId, Dev) ->
         {tcp_closed, _} ->
             stop_device(Dev),
             ok;
-        {'DOWN', _, _, _, normal} ->
+        {'DOWN', A, B, C, normal} ->
+            ct:pal("{stopping, self()}: ~p", [{stopping, self(), A, B, C}]),
             ok;
         E ->
             ?ERROR_MSG("TCP connector terminated:~n~p~n~n", [E]),
@@ -183,6 +186,7 @@ get_device(undefined, undefined, undefined) ->
     {undefined, undefined};
 get_device(undefined, DevId, undefined) ->
     {ok, Dev} = nts_device:start_link(DevId, self()),
+    ct:pal("{started, DevId, Dev}: ~p", [{started, DevId, Dev}]),
     {DevId, Dev};
 get_device(DevId, _, Dev) when is_pid(Dev) ->
     {DevId, Dev}.
