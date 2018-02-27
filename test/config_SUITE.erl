@@ -15,7 +15,8 @@
 
 
 all() ->
-    [config, reload].
+%%    [config, reload].
+    [modules].
 
 init_per_suite(Config) ->
     application:stop(nts),
@@ -51,6 +52,26 @@ reload(Config) ->
     nts_helpers:change_config(Config, "does_not_exist.cfg"),
     ?assertEqual(124, nts_config:get_value(a)),
     ?assertEqual("siedem", nts_config:get_value(b)),
+    ok.
+
+modules(Config) ->
+    nts_helpers:change_config(Config, "nts.cfg"),
+    Ch = supervisor:which_children(nts_modules_sup),
+    [{_, P, _, _}] = Ch,
+    #{param_a := 123} = gen_server:call(P, getconf),
+    nts_helpers:change_config(Config, "nts_alt.cfg"),
+    timer:sleep(100),
+    Ch2 = supervisor:which_children(nts_modules_sup),
+    [_, _] = Ch2,
+    {_, P1, _, _} = proplists:lookup(test_mod, Ch2),
+    {_, P2, _, _} = proplists:lookup(test_mod_2, Ch2),
+    #{param_a := 321} = gen_server:call(P1, getconf),
+    #{param_b := 111} = gen_server:call(P2, getconf),
+    nts_helpers:change_config(Config, "nts.cfg"),
+    timer:sleep(100),
+    Ch3 = supervisor:which_children(nts_modules_sup),
+    [{_, Px, _, _}] = Ch3,
+    #{param_a := 123} = gen_server:call(Px, getconf),
     ok.
 
 

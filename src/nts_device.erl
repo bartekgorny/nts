@@ -146,7 +146,6 @@ normal({call, From}, {reprocess_data, FromDtm}, State) ->
 normal(event_timeout, idle, _State) ->
     {stop, idle_timeout};
 normal({call, From}, #frame{} = Frame, State) ->
-    ct:pal("{normal, Frame}: ~p", [{normal, Frame}]),
     % here we handle fresh frame from a device
     FrameDtm = nts_frame:get(dtm, Frame),
     Loc = State#state.loc,
@@ -180,7 +179,6 @@ handle_event(_, _Event, _StateName, _State) ->
     keep_state_and_data.
 
 terminate(_Reason, _StateName, State) ->
-    ct:pal("terminate: ~p", [terminate]),
     maybe_emit_device_down(State),
     update_current_down(State#state.devid, State#state.loc),
     ok.
@@ -272,7 +270,6 @@ do_process_frame(Origin, Frame, State) ->
 -spec do_process_frame(new | reproc, loc() | undefined, frame(), state()) ->
     state() | {error, atom()}.
 do_process_frame(Origin, OrigLoc, Frame, State) ->
-    ct:pal("{processing, Frame}: ~p", [{processing, Frame}]),
     nts_hooks:run(preprocess, [], []),
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
@@ -302,7 +299,6 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
             NewState;
         {NewLocation0, NewInternal} ->
             NewLocation = maybe_set_status_up(Origin, OrigLoc, NewLocation0),
-            ct:pal("maybe: ~p", [{Origin, Frame, NewLocation, State}]),
             NewState0 = maybe_emit_device_up(Origin, Frame, NewLocation, State),
             % save and possibly publish events created by handlers
             NewInternal1 = flush_events(Origin, NewInternal),
@@ -383,6 +379,7 @@ get_up_status(Loc) ->
 
 start_reproc_timer(Dtm, #state{reproc_timer = undefined} = State) ->
     TVal = get_config(rewrite_history_timeout, State),
+    % FIXME
     Timer = timer:apply_after(TVal * 1000, ?MODULE, reprocess_data, [self(), Dtm]),
     State#state{reproc_timer = Timer};
 start_reproc_timer(Dtm, State) ->

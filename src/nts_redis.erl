@@ -4,16 +4,18 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 19. Jan 2018 22:52
+%%% Created : 24. Feb 2018 18:16
 %%%-------------------------------------------------------------------
--module(nts_tcp).
+-module(nts_redis).
 -author("bartekgorny").
 
 -behaviour(gen_server).
 
 -include_lib("nts/src/nts.hrl").
+
 %% API
--export([start_link/2]).
+-export([start/0]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -25,7 +27,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {dtype, port}).
+-record(state, {}).
 
 %%%===================================================================
 %%% API
@@ -37,22 +39,39 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link(atom(), integer()) ->
+
+-spec(start() ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link(DType, Port) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [DType, Port], []).
+start() ->
+    nts_redis_sup:start_link().
+
+-spec(start_link() ->
+    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start_link() ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Initializes the server
+%%
+%% @spec init(Args) -> {ok, State} |
+%%                     {ok, State, Timeout} |
+%%                     ignore |
+%%                     {stop, Reason}
+%% @end
+%%--------------------------------------------------------------------
 -spec(init(Args :: term()) ->
     {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
-init([DType, Port]) ->
-    timer:sleep(100), % reduce restart intensity (lame)
-    ok = start_listener(DType, Port),
-    {ok, #state{dtype = DType, port = Port}}.
+init([]) ->
+    Config = nts_config:get_value([modules, nts_redis]),
+    ?ERROR_MSG("Config:~n~p~n~n", [Config]),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -136,66 +155,3 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-start_listener(DType, Port) ->
-    Opts = [{active, true}, binary, {reuseaddr, true}],
-    case gen_tcp:listen(Port, Opts) of
-        {ok, ListenSocket} ->
-            S = self(),
-            spawn(fun() -> accept(ListenSocket, DType, S) end),
-            ok;
-        E ->
-            E
-    end.
-
-accept(LS, DType, Listener) ->
-    monitor(process, Listener),
-    case gen_tcp:accept(LS) of
-        {ok, S} ->
-            spawn(fun() -> accept(LS, DType, Listener) end),
-            server(S, DType);
-        Other ->
-            ?ERROR_MSG("accept returned ~w - goodbye!~n",[Other]),
-            ok
-    end.
-
-server(Socket, DType) ->
-    server(Socket, DType, <<"">>, undefined, undefined).
-
-server(Socket, DType, Buffer, DevId, Dev) ->
-    receive
-        {tcp, _, Data} ->
-            Frame = nts_frame:parse(DType, Data),
-            {DeviceId, Device} = get_device(DevId, Frame#frame.device, Dev),
-            maybe_process_frame(Device, Frame),
-            server(Socket, DType, Buffer, DeviceId, Device);
-        {tcp_closed, _} ->
-            stop_device(Dev),
-            ok;
-        {'DOWN', A, B, C, normal} ->
-            ok;
-        E ->
-            ?ERROR_MSG("TCP connector terminated:~n~p~n~n", [E]),
-            exit(unexpected_tcp_termination)
-
-    end.
-
-get_device(undefined, undefined, undefined) ->
-    {undefined, undefined};
-get_device(undefined, DevId, undefined) ->
-    {ok, Dev} = nts_device:start_link(DevId, self()),
-    {DevId, Dev};
-get_device(DevId, _, Dev) when is_pid(Dev) ->
-    {DevId, Dev}.
-
-maybe_process_frame(undefined, _) ->
-    ok;
-maybe_process_frame(_, undefined) ->
-    ok;
-maybe_process_frame(Device, #frame{} = Frame) when is_pid(Device) ->
-    nts_device:process_frame(Device, Frame).
-
-stop_device(undefined) ->
-    ok;
-stop_device(Dev) when is_pid(Dev) ->
-    nts_device:stop(Dev).
