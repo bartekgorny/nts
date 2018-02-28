@@ -39,7 +39,10 @@ start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 reload() ->
-    Mods = nts_config:get_value(modules),
+    Mods = case nts_config:get_value(modules) of
+               undefined -> [];
+               ModuleList -> ModuleList
+           end,
     ToRun = sets:from_list([M || {M, _} <- Mods]),
     Children = supervisor:which_children(?MODULE),
     Running = sets:from_list([M || {M, _, _, _} <- Children]),
