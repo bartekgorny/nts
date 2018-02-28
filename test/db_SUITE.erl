@@ -56,15 +56,15 @@ locs_and_frames(_) ->
                     #{statevar => 22}),
     % last location from history
     LastDirect = nts_db:last_loc(?DEVID, Dtm2),
-    ?assertEqual(Dtm2, LastDirect#loc.dtm),
+    ?assertClose(Dtm2, LastDirect#loc.dtm),
     ?assertEqual(18, LastDirect#loc.lat),
     LastIndirect = nts_db:last_loc(?DEVID, fromnow(-10)),
-    ?assertEqual(Dtm2, LastIndirect#loc.dtm),
+    ?assertClose(Dtm2, LastIndirect#loc.dtm),
     ?assertEqual(18, LastIndirect#loc.lat),
     undefined = nts_db:last_loc(?DEVID, fromnow(-22)),
     % last loc and state
     {LastLoc, LastS} = nts_db:last_state(?DEVID),
-    ?assertEqual(Dtm2, LastLoc#loc.dtm),
+    ?assertClose(Dtm2, LastLoc#loc.dtm),
     ?assertEqual(22, maps:get(statevar, LastS)),
     % history
     Hist = nts_db:history(?DEVID, fromnow(-25), fromnow(-17)),
@@ -74,7 +74,7 @@ locs_and_frames(_) ->
     D = H1#loc.data,
     % datetimes in status data are stored and retrieved as binaries
     % parse them when you need
-    ?assertEqual(
+    ?assertClose(
         fromnow(-20),
         nts_utils:bin2time(maps:get(last_signal_dtm, D))),
     ?assertEqual(-20, maps:get(offset, D)),
@@ -86,10 +86,10 @@ locs_and_frames(_) ->
     [A, B] = Res,
     ?assertEqual(true, A#frame.hex),
     ?assertEqual(<<1, 99, 123>>, A#frame.data),
-    ?assertEqual(R1, A#frame.received),
+    ?assertClose(R1, A#frame.received),
     ?assertEqual(false, B#frame.hex),
     ?assertEqual(<<"Frame01">>, B#frame.data),
-    ?assertEqual(R2, B#frame.received),
+    ?assertClose(R2, B#frame.received),
     ok.
 
 frames_and_updates(_) ->

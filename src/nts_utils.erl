@@ -15,6 +15,7 @@
 -export([json_encode_map/1, json_decode_map/1, format_error/1]).
 -export([time2string/1, time2bin/1, bin2time/1]).
 -export([dtm/0, distance/1, distance/2]).
+-export([encode_location/1]).
 
 -export([get_brackets/3, ew_table/0]).
 -export([timediff/2]).
@@ -69,6 +70,15 @@ json_decode_map(Data) ->
 
 format_error({A, B}) ->
     list_to_binary(io_lib:format("~p:~p", [A, B])).
+
+encode_location(Loc) ->
+    M  = #{
+        dtm => Loc#loc.dtm,
+        lat => Loc#loc.lat,
+        lon => Loc#loc.lon,
+        data => Loc#loc.data
+    },
+    json_encode_map(M).
 
 %% @doc
 %% if we wanted to be more precise we could implement Haversine formula

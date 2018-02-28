@@ -60,13 +60,13 @@ redis_store(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Dev} = nts_device:start_link(?DEVID),
     nts_device:process_frame(Dev, mkframe(-10, -20)),
-    RecDtm = fromnow(-10),
-    Dtm = fromnow(-20),
-    S = nts_device:getstate(Dev),
-    D = maps:get(status, S#loc.data),
-    ?assertClose(RecDtm, maps:get(last_signal, D)),
-    ?assertClose(Dtm, maps:get(last_signal_dtm, D)),
-    ?assertMatch({10, 20}, nts_location:coords(S)),
+    D = fromnow(-20),
+    Conn = get_conn(),
+    Rval = get_json_value(Conn, <<"device-state-01">>),
+    #{dtm := Dtm, lat := Lat, data := Data} = Rval,
+    ?assertEqual(D, nts_utils:bin2time(Dtm)),
+    ?assertEqual(10, Lat),
+    ?assertMatch(#{status := #{up := true}}, Data),
     ok.
 
 
@@ -115,4 +115,21 @@ add_handlers(Case) ->
 remove_handlers(Case) ->
     Handlers = handlers_for_testcase(Case),
     lists:map(fun nts_helpers:remove_handler/1, Handlers).
+
+get_conn() ->
+    Conf = nts_config:get_value([modules, nts_redis]),
+    Host = maps:get(host, Conf),
+    Port = maps:get(port, Conf, 6379),
+    Db = maps:get(db, Conf, 0),
+    Password = maps:get(password, Conf, ""),
+    Timeout = maps:get(timeout, Conf, 1000),
+    {ok, P} = eredis:start_link(Host, Port, Db, Password, Timeout),
+    P.
+
+get_value(Conn, Key) ->
+    {ok, Val} = eredis:q(Conn, ["GET", Key]),
+    Val.
+
+get_json_value(Conn, Key) ->
+    nts_utils:json_decode_map(get_value(Conn, Key)).
 
