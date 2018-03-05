@@ -20,9 +20,9 @@
 
 all() ->
     [
-        connect_and_disconnect
-%%        connect_and_terminate,
-%%        connect_and_stop
+        connect_and_disconnect,
+        connect_and_terminate,
+        connect_and_stop
     ].
 
 init_per_suite(C) ->

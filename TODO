@@ -18,6 +18,6 @@ v refactor reprocessing to bring it closer to the main impl, otherwise I'll get 
 v indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne do floatfiltra)
 - zrefaktorować event handlery (te do system_bus)
 - ranch acceptor pool
-- przemyśleć kwestię inicjalizacji opcjonalnych modułów (np redis)
 - komunikacja zwrotna z urządzeniem
 - behawior do hooków
+- pool redis
