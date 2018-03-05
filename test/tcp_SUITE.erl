@@ -21,7 +21,7 @@
 all() ->
     [
         connect_and_disconnect,
-        connect_and_terminate,
+%%        connect_and_terminate, % not if we use ranch
         connect_and_stop
     ].
 
@@ -51,6 +51,9 @@ end_per_suite(_Config) ->
 %%% tests
 %%%===================================================================
 
+just_start(_) ->
+    start_device(),
+    ok.
 
 connect_and_disconnect(_) ->
     % closing connection terminates device
@@ -65,23 +68,24 @@ connect_and_disconnect(_) ->
     check_event_log(),
     ok.
 
-connect_and_terminate(_) ->
-    % shutting down listener closes connections and
-    % acceptors and terminates devices
-    Socket = start_device(),
-    Dev = global:whereis_name(?DEVID),
-    ?assertNotEqual(undefined, Dev),
-    %% if we stop listener...
-    nts_tcp_sup:terminate_listeners(),
-    timer:sleep(500),
-    undefined = global:whereis_name(?DEVID),
-    %% then connection is closed
-    {error, closed} = gen_tcp:send(Socket, <<"asfdd">>),
-    %% and there is no acceptor
-    {error, econnrefused} = gen_tcp:connect("localhost", 12345, []),
-    check_event_log(),
-    nts_tcp_sup:reload(),
-    ok.
+%%% ranch keeps connection open even if acceptors are down
+%%connect_and_terminate(_) ->
+%%    % shutting down listener closes connections and
+%%    % acceptors and terminates devices
+%%    Socket = start_device(),
+%%    Dev = global:whereis_name(?DEVID),
+%%    ?assertNotEqual(undefined, Dev),
+%%     if we stop listener...
+%%    nts_tcp_sup:terminate_listeners(),
+%%    timer:sleep(500),
+%%    undefined = global:whereis_name(?DEVID),
+%%     then connection is closed
+%%    {error, closed} = gen_tcp:send(Socket, <<"asfdd">>),
+%%     and there is no acceptor
+%%    {error, econnrefused} = gen_tcp:connect("localhost", 12345, []),
+%%    check_event_log(),
+%%    nts_tcp_sup:reload(),
+%%    ok.
 
 connect_and_stop(_) ->
     % stopping or exiting device terminates connection

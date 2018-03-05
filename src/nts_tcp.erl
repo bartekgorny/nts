@@ -4,99 +4,37 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 19. Jan 2018 22:52
+%%% Created : 06. Mar 2018 00:01
 %%%-------------------------------------------------------------------
 -module(nts_tcp).
+-behaviour(ranch_protocol).
 -author("bartekgorny").
 
--behaviour(gen_server).
-
 -include_lib("nts/src/nts.hrl").
-%% API
--export([start_link/2]).
 
-%% gen_server callbacks
--export([init/1,
-    handle_call/3,
-    handle_cast/2,
-    handle_info/2,
-    terminate/2,
-    code_change/3]).
+-export([start_link/4]).
+-export([init/4]).
 
--define(SERVER, ?MODULE).
+start_link(Ref, Socket, Transport, Opts) ->
+    Pid = spawn_link(?MODULE, init, [Ref, Socket, Transport, Opts]),
+    {ok, Pid}.
 
--record(state, {dtype, port}).
+init(Ref, Socket, Transport, _Opts = []) ->
+    Transport:setopts(Socket, [{active, true}]),
+    ok = ranch:accept_ack(Ref),
+    server(Socket, Ref, Transport).
 
-%%%===================================================================
-%%% API
-%%%===================================================================
+server(Socket, DType, Transport) ->
+    server(Socket, DType, Transport, <<"">>, undefined, undefined).
 
-start_link(DType, Port) ->
-    gen_server:start_link(?MODULE, [DType, Port], []).
-
-%%%===================================================================
-%%% gen_server callbacks
-%%%===================================================================
-
-init([DType, Port]) ->
-    timer:sleep(100), % reduce restart intensity (lame)
-    ok = start_listener(DType, Port),
-    {ok, #state{dtype = DType, port = Port}}.
-
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
-
-handle_cast(_Request, State) ->
-    {noreply, State}.
-
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-terminate(_Reason, _State) ->
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-start_listener(DType, Port) ->
-    Opts = [{active, true}, binary, {reuseaddr, true}],
-    case gen_tcp:listen(Port, Opts) of
-        {ok, ListenSocket} ->
-            S = self(),
-            spawn(fun() -> accept(ListenSocket, DType, S) end),
-            ok;
-        E ->
-            E
-    end.
-
-accept(LS, DType, Listener) ->
-    monitor(process, Listener),
-    case gen_tcp:accept(LS) of
-        {ok, S} ->
-            spawn(fun() -> accept(LS, DType, Listener) end),
-            server(S, DType);
-        {error, closed} ->
-            ok;
-        Other ->
-            ?ERROR_MSG("accept returned ~w",[Other]),
-            ok
-    end.
-
-server(Socket, DType) ->
-    server(Socket, DType, <<"">>, undefined, undefined).
-
-server(Socket, DType, Buffer, DevId, Dev) ->
+server(Socket, DType, Transport, Buffer, DevId, Dev) ->
     process_flag(trap_exit, true),
     receive
         {tcp, _, Data} ->
             Frame = nts_frame:parse(DType, Data),
             {DeviceId, Device} = get_device(DevId, Frame#frame.device, Dev),
             maybe_process_frame(Device, Frame),
-            server(Socket, DType, Buffer, DeviceId, Device);
+            server(Socket, DType, Transport, Buffer, DeviceId, Device);
         {tcp_closed, _} ->
             % connection terminated - this is normal
             stop_device(Dev),
@@ -113,7 +51,6 @@ server(Socket, DType, Buffer, DevId, Dev) ->
             gen_tcp:close(Socket),
             ?ERROR_MSG("TCP connector terminated:~n~p~n~n", [E]),
             exit(unexpected_tcp_termination)
-
     end.
 
 get_device(undefined, undefined, undefined) ->

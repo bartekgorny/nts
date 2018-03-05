@@ -42,6 +42,7 @@ start_link() ->
 
 reload() ->
     Listeners = nts_config:get_value(listen),
+    % FIXME it should be more intelligent
     setup_listeners(Listeners),
     ok.
 
@@ -70,15 +71,16 @@ init([]) ->
     Listeners = nts_config:get_value(listen),
     setup_listeners(Listeners),
     gen_event:add_sup_handler(system_bus, nts_tcp_eh, []),
-    RestartStrategy = simple_one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
+    RestartStrategy = one_for_one,
+    MaxRestarts = 10,
+    MaxSecondsBetweenRestarts = 10,
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-    Child = #{id => listener, start => {nts_tcp, start_link, []}},
+    RanchSupSpec = {ranch_sup, {ranch_sup, start_link, []},
+        permanent, 5000, supervisor, [ranch_sup]},
 
-    {ok, {SupFlags, [Child]}}.
+    {ok, {SupFlags, [RanchSupSpec]}}.
 
 %%%===================================================================
 %%% Internal functions
@@ -93,8 +95,18 @@ setup_listeners(Listeners) ->
     ok.
 
 terminate_listeners() ->
-    lists:map(fun(Id) -> supervisor:terminate_child(?SERVER, Id) end,
+    lists:map(fun(Id) ->
+                  supervisor:terminate_child(?SERVER, Id),
+                  supervisor:delete_child(?SERVER, Id)
+              end,
               [Pid || {_, Pid, _, _} <- supervisor:which_children(?SERVER)]).
 
 start_listener({DType, _, Port}) ->
-    supervisor:start_child(?SERVER, [DType, Port]).
+    ListenerSpec = ranch:child_spec(DType,
+                                    100,
+                                    ranch_tcp,
+                                    [{port, Port}],
+                                    nts_tcp_protocol,
+                                    []
+                                   ),
+    supervisor:start_child(?SERVER, ListenerSpec).
