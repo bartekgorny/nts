@@ -20,9 +20,9 @@
 
 all() ->
     [
-        connect_and_disconnect,
-        connect_and_terminate,
-        connect_and_stop
+        connect_and_disconnect
+%%        connect_and_terminate,
+%%        connect_and_stop
     ].
 
 init_per_suite(C) ->
@@ -59,7 +59,8 @@ connect_and_disconnect(_) ->
     State = nts_device:getstate(Dev),
     #loc{} = State,
     gen_tcp:close(Socket),
-    timer:sleep(100),
+    timer:sleep(500),
+    % there is a delay because the process is alive until its terminate returns
     undefined = global:whereis_name(?DEVID),
     check_event_log(),
     ok.
@@ -72,7 +73,7 @@ connect_and_terminate(_) ->
     ?assertNotEqual(undefined, Dev),
     %% if we stop listener...
     nts_tcp_sup:terminate_listeners(),
-    timer:sleep(100),
+    timer:sleep(500),
     undefined = global:whereis_name(?DEVID),
     %% then connection is closed
     {error, closed} = gen_tcp:send(Socket, <<"asfdd">>),
@@ -87,7 +88,7 @@ connect_and_stop(_) ->
     Socket = start_device(),
     Dev = global:whereis_name(?DEVID),
     exit(Dev, forced),
-    timer:sleep(100),
+    timer:sleep(500),
     Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
     {error, closed} = gen_tcp:send(Socket, Frame1),
     check_event_log(),
@@ -101,7 +102,7 @@ start_device() ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Socket} = gen_tcp:connect("localhost", 12345, []),
     Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
-    Res = gen_tcp:send(Socket, Frame1),
+    ok = gen_tcp:send(Socket, Frame1),
     timer:sleep(200),
     Socket.
 

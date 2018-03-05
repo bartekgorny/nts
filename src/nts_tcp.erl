@@ -32,8 +32,7 @@
 %%%===================================================================
 
 start_link(DType, Port) ->
-    % FIXME do not name this process
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [DType, Port], []).
+    gen_server:start_link(?MODULE, [DType, Port], []).
 
 %%%===================================================================
 %%% gen_server callbacks
