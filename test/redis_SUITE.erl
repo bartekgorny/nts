@@ -64,7 +64,7 @@ redis_store(_) ->
     Conn = get_conn(),
     Rval = get_json_value(Conn, <<"device-state-01">>),
     #{dtm := Dtm, lat := Lat, data := Data} = Rval,
-    ?assertEqual(D, nts_utils:bin2time(Dtm)),
+    ?assertClose(D, nts_utils:bin2time(Dtm)),
     ?assertEqual(10, Lat),
     ?assertMatch(#{status := #{up := true}}, Data),
     ok.
