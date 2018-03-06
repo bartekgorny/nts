@@ -22,7 +22,8 @@ all() ->
      floatfilter,
      dateutil,
      utilities,
-     mapper
+     mapper,
+     rebuffer
     ].
 
 
@@ -125,6 +126,46 @@ utilities(_) ->
     Lst4 = nts_utils:insort({1, a}, []),
     ?assertEqual([{1, a}], Lst4),
     ok.
+
+rebuffer(_) ->
+    Checker = fun({{Buf, Data}, {ExpBuf, ExpData}}) ->
+                  ?assertEqual({ExpBuf, ExpData}, nts_utils:rebuffer(Buf, Data))
+              end,
+    Assumed = [
+        {
+            {<<>>, <<"abc">>},
+            {<<"abc">>, []}
+        },
+        {
+            {<<>>, <<"abc\n">>},
+            {<<>>, [<<"abc">>]}
+        },
+        {
+            {<<>>, <<"abc\ndef\n">>},
+            {<<>>, [<<"abc">>, <<"def">>]}
+        },
+        {
+            {<<>>, <<"abc\nde">>},
+            {<<"de">>, [<<"abc">>]}
+        },
+        {
+            {<<"a">>, <<"bc\n">>},
+            {<<"">>, [<<"abc">>]}
+        },
+        {
+            {<<"a">>, <<"bc\nde">>},
+            {<<"de">>, [<<"abc">>]}
+        },
+        {
+            {<<"a">>, <<"bc\ndef\n">>},
+            {<<"">>, [<<"abc">>, <<"def">>]}
+        },
+        {
+            {<<>>, <<>>},
+            {<<>>, []}
+        }
+    ],
+    lists:map(Checker, Assumed).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

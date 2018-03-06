@@ -21,7 +21,7 @@
 -export([timediff/2]).
 -export([insort/2]).
 
--export([test/0]).
+-export([rebuffer/2]).
 
 dtm() ->
     calendar:now_to_datetime(os:timestamp()).
@@ -172,9 +172,26 @@ insort(Obj, Smaller, [H|T]) when Obj > H ->
 insort(Obj, Smaller, T) ->
     Smaller ++ [Obj] ++ T.
 
-test() ->
-    M = #{flat => dtm(), what => "a", nested => #{rien => 123, d => dtm()}},
-    io:format("M:~n~p~n~n", [M]),
-    CM = cookmap(M),
-    io:format("CM:~n~p~n~n", [CM]),
-    json_encode_map(CM).
+
+rebuffer(Buffer, <<>>) ->
+    {Buffer, []};
+rebuffer(Buffer, Data) ->
+    DList = binary:split(Data, <<10>>, [global]),
+    [Last | DList1] = lists:reverse(DList),
+    case Last of
+        <<>> ->
+            rebuffer(Buffer, lists:reverse(DList1), true);
+        _ ->
+            rebuffer(Buffer, DList, false)
+    end.
+
+rebuffer(Buffer, [Data], false) ->
+    {<<Buffer/binary, Data/binary>>, []};
+rebuffer(Buffer, [Data], true) ->
+    {<<>>, [<<Buffer/binary, Data/binary>>]};
+rebuffer(Buffer, [H|Tail], true) ->
+    {<<>>, [<<Buffer/binary, H/binary>> | Tail]};
+rebuffer(Buffer, [H|Tail], false) ->
+    [Last|NTailR] = lists:reverse(Tail),
+    NTail = lists:reverse(NTailR),
+    {Last, [<<Buffer/binary, H/binary>> | NTail]}.

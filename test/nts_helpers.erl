@@ -15,6 +15,7 @@
 -export([compare_near_dates/2, compare_near_dates/3]).
 -export([add_handler/1, remove_handler/1, add_handler/2, remove_handler/2]).
 -export([trace_funcs/1]).
+-export([mkframe/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("nts/src/nts.hrl").
@@ -90,3 +91,33 @@ trace_funcs(ToTrace) ->
     ct:pal("Spec: ~p, tracing: ~p", [length(ToTrace), R]),
     ct:pal("Tracing: ~p", [ToTrace]),
     ok.
+
+mkframe(formula, DevId, Offset, {Lat, Lon}) ->
+    Trail = <<"0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
+    <<_:5/binary>> = DevId,
+    BLat = format_coord(Lat),
+    BLon = format_coord(Lon),
+    {{Y, M, D}, {H, Mi, S}} = fromnow(Offset),
+    Dtm = <<(integer_to_binary(Y))/binary,
+            (pad(M))/binary,
+            (pad(D))/binary,
+            (pad(H))/binary,
+            (pad(Mi))/binary,
+            (pad(S))/binary>>,
+    <<"a", DevId/binary, ",", Dtm/binary, ",F1", ",", BLon/binary, ",",
+      BLat/binary, ",", Trail/binary, 10>>.
+
+pad(I) ->
+    list_to_binary(
+        string:right(integer_to_list(I), 2, $0)).
+
+format_coord(I) when is_integer(I) ->
+    format_coord(I, 0);
+format_coord(I) when is_float(I) ->
+    format_coord(floor(I), I - floor(I)).
+
+format_coord(I, F) ->
+    In = string:right(integer_to_list(I), 2, $0),
+    Fn = string:left(integer_to_list(F), 6, $0),
+    <<(list_to_binary(In))/binary, ".", (list_to_binary(Fn))/binary>>.
+

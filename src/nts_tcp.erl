@@ -31,10 +31,17 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
     process_flag(trap_exit, true),
     receive
         {tcp, _, Data} ->
-            Frame = nts_frame:parse(DType, Data),
-            {DeviceId, Device} = get_device(DevId, Frame#frame.device, Dev),
-            maybe_process_frame(Device, Frame),
-            server(Socket, DType, Transport, Buffer, DeviceId, Device);
+            {NBuffer, DataList} = nts_utils:rebuffer(Buffer, Data),
+            ProcFun = fun(D, {DevId0, Dev0}) ->
+                          Frame = nts_frame:parse(DType, D),
+                          {DeviceId, Device} = get_device(DevId0,
+                                                          Frame#frame.device,
+                                                          Dev0),
+                          maybe_process_frame(Device, Frame),
+                          {DeviceId, Device}
+                      end,
+            {DeviceId, Device} = lists:foldl(ProcFun, {DevId, Dev}, DataList),
+            server(Socket, DType, Transport, NBuffer, DeviceId, Device);
         {tcp_closed, _} ->
             % connection terminated - this is normal
             stop_device(Dev),

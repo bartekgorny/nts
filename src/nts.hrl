@@ -30,7 +30,7 @@
 -record(frame, {id = 0, device, received, type, data = <<>>, hex = false, values = #{}}).
 %% frame type may be undefined if we retrieve them from database for reprocessing
 %% frame parser returns it with frametype set
--type frametype() :: location | event | hearbeat | undefined.
+-type frametype() :: location | event | hearbeat | undefined | invalid.
 -type frame() :: #frame{id :: integer(), device :: devid(), received :: datetime(),
                         type :: frametype(), data :: binary(), hex :: boolean(), values :: map()}.
 

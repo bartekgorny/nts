@@ -22,7 +22,8 @@ all() ->
     [
         connect_and_disconnect,
 %%        connect_and_terminate, % not if we use ranch
-        connect_and_stop
+        connect_and_stop,
+        buffering
     ].
 
 init_per_suite(C) ->
@@ -51,12 +52,15 @@ end_per_suite(_Config) ->
 %%% tests
 %%%===================================================================
 
-just_start(_) ->
-    start_device(),
-    ok.
-
 connect_and_disconnect(_) ->
     % closing connection terminates device
+    nts_helpers:trace_funcs([
+        {nts_utils, rebuffer},
+        {nts_frame, parse},
+        {nts_device, termnate},
+        {nts_tcp, maybe_process_frame},
+        {nts_device, do_process_frame}
+    ]),
     Socket = start_device(),
     Dev = global:whereis_name(?DEVID),
     State = nts_device:getstate(Dev),
@@ -98,6 +102,33 @@ connect_and_stop(_) ->
     check_event_log(),
     ok.
 
+buffering(_) ->
+    Socket = start_device(),
+    timer:sleep(100),
+    Dev = global:whereis_name(?DEVID),
+    F1 = nts_helpers:mkframe(formula, ?DEVID, -10, {10, 20}),
+    ok = gen_tcp:send(Socket, F1),
+    assert_lat(Dev, 10.0),
+    % prepare half a frame, then the other half with part of the next, then rest
+    Fa = nts_helpers:mkframe(formula, ?DEVID, -8, {8, 20}),
+    Fb = nts_helpers:mkframe(formula, ?DEVID, -6, {6, 20}),
+    M = <<$F>>,
+    [Fa1, Fa2] = binary:split(Fa, M),
+    [Fb1, Fb2] = binary:split(Fb, M),
+    P1 = <<Fa1/binary, M/binary>>,
+    P2 = <<Fa2/binary, Fb1/binary>>,
+    P3 = <<M/binary, Fb2/binary>>,
+    ok = gen_tcp:send(Socket, P1),
+    timer:sleep(50),
+    assert_lat(Dev, 10.0),
+    ok = gen_tcp:send(Socket, P2),
+    timer:sleep(50),
+    assert_lat(Dev, 8.0),
+    ok = gen_tcp:send(Socket, P3),
+    timer:sleep(50),
+    assert_lat(Dev, 6.0),
+    ok.
+
 %%%===================================================================
 %%% helpers
 %%%===================================================================
@@ -105,9 +136,9 @@ connect_and_stop(_) ->
 start_device() ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Socket} = gen_tcp:connect("localhost", 12345, []),
-    Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0">>,
+    Frame1 = <<"a00001,20120307132629,F1,21.290000,52.290000,0,12,191,8,2,1094,0,12.40,12.69,0,1094,,,,,,,,,0\n">>,
     ok = gen_tcp:send(Socket, Frame1),
-    timer:sleep(200),
+    timer:sleep(100),
     Socket.
 
 check_event_log() ->
@@ -117,3 +148,8 @@ check_event_log() ->
     ?assertEqual([device, activity, down], E1#event.type),
     ok.
 
+assert_lat(Dev, Lat) ->
+    timer:sleep(100),
+    Loc = nts_device:getstate(Dev),
+    {A, _} = nts_location:coords(Loc),
+    ?assertEqual(Lat, A).

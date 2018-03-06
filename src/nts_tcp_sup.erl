@@ -106,7 +106,7 @@ start_listener({DType, _, Port}) ->
                                     100,
                                     ranch_tcp,
                                     [{port, Port}],
-                                    nts_tcp_protocol,
+                                    nts_tcp,
                                     []
                                    ),
     supervisor:start_child(?SERVER, ListenerSpec).
