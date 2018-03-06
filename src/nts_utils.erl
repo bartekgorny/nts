@@ -172,7 +172,7 @@ insort(Obj, Smaller, [H|T]) when Obj > H ->
 insort(Obj, Smaller, T) ->
     Smaller ++ [Obj] ++ T.
 
-
+-spec(rebuffer(binary(), binary()) -> {binary(), [binary()]}).
 rebuffer(Buffer, <<>>) ->
     {Buffer, []};
 rebuffer(Buffer, Data) ->

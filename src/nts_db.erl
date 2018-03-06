@@ -23,6 +23,7 @@
 -export([table_exists/1]). % needed for tests
 
 
+-spec query(list()) -> ok | {ok, term(), term()} | {error, term()}.
 query(Q) ->
     log_query(Q),
     QType = hd(Q),
@@ -48,22 +49,25 @@ query(Q) ->
     nts_db_conn:free_connection(Conn),
     Ret.
 
+-spec query(pid(), list()) -> ok | {ok, term(), term()} | {error, term()}.
 query(Conn, Q) ->
     log_query(Q),
+    QType = hd(Q),
     nts_metrics:up([db, ops]),
-    Ret = case epgsql:squery(Conn, Q) of
+    Ret = case {QType, epgsql:squery(Conn, Q)} of
               {$D, {ok, 0}} -> ok; % deleted 0 rows
-              {ok, Types, Values} -> {Types, Values};
-              {ok, 0} ->
+              {_, {ok, Types, Values}} -> {Types, Values};
+              {_, {ok, 0}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, op_failed};
-              {ok, _} -> ok;
-              {error, #error{codename = EName}} ->
+              {_, {ok, _}} -> ok;
+              {_, {error, #error{codename = EName}}} ->
                   nts_metrics:up([db, failed_ops]),
                   {error, EName}
           end,
     case Ret of
-        {error, _} ->
+        {error, E} ->
+            ?ERROR_MSG("ERRRRRR:~n~p~n~n", [E]),
             throw(stop_that_transaction);
         _ ->
             ok
@@ -363,12 +367,14 @@ do_initialise_device(Nid) ->
     NSL2 = lists:filter(fun(Q) -> Q /= <<"">> andalso binary:part(Q, {0, 2}) /= <<"--">> end, NSL1),
     NS2 = lists:foldl(fun(E, A) -> <<A/binary, E/binary>> end, <<>>, NSL2),
     NSList = binary:split(NS2, <<";">>, [global]),
+    NSListF = lists:filter(fun(Z) -> Z =/= <<>> end, NSList),
+    NSListL = lists:map(fun binary_to_list/1, NSListF),
     transaction(fun(Conn) ->
         lists:map(fun(Q) -> case query(Conn, Q) of
                                 ok -> ok;
                                 {[], []} -> ok
                             end
-                  end, NSList)
+                  end, NSListL)
         end).
 
 -spec purge_device(devid()) -> ok | {error, atom()}.

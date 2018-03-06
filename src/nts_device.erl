@@ -258,7 +258,8 @@ process_events(publish, Q) ->
               end,
               Q).
 
--spec do_process_frame(new | reproc | buffer, frame(), state()) -> state() | {error, atom()}.
+-spec do_process_frame(new | reproc | buffer, frame(), state()) ->
+    state() | {error, atom()} | {exit, atom()}.
 do_process_frame(buffer, Frame, State) ->
     DevId = devid(State),
     nts_db:save_frame(DevId, Frame),
@@ -270,7 +271,7 @@ do_process_frame(Origin, Frame, State) ->
 %% in reprocessing, OrigLoc is the one we got from dbase and may modify
 %% for new loc it is undefined
 -spec do_process_frame(new | reproc, loc() | undefined, frame(), state()) ->
-    state() | {error, atom()}.
+    state() | {error, atom()} | {exit, atom()}.
 do_process_frame(Origin, OrigLoc, Frame, State) ->
     nts_hooks:run(preprocess, [], []),
     % clear previous error

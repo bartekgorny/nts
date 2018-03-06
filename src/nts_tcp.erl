@@ -70,8 +70,6 @@ get_device(DevId, _, Dev) when is_pid(Dev) ->
 
 maybe_process_frame(undefined, _) ->
     ok;
-maybe_process_frame(_, undefined) ->
-    ok;
 maybe_process_frame(Device, #frame{} = Frame) when is_pid(Device) ->
     nts_device:process_frame(Device, Frame).
 
