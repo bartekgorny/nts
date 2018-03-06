@@ -15,11 +15,15 @@
 
 parse_frame(Frame) ->
     Frame1 = strip($a, Frame),
-    <<Id:8/binary-unit:5, $,, Dt:8/binary-unit:14, $,, Fid:8/binary-unit:2, $,, Reszta/binary>> = Frame1,
-    RList = binary:split(Reszta, <<",">>, [global]),
-    DMap = #{dtm => parse_dt(Dt), frame_type => Fid},
-    Values = process_fields(field_defs(Fid), RList, DMap),
-    #frame{type = maps:get(report_type, Values), device = Id, values = Values}.
+    case Frame1 of
+        <<Id:8/binary-unit:5, $,, Dt:8/binary-unit:14, $,, Fid:8/binary-unit:2, $,, Reszta/binary>> ->
+            RList = binary:split(Reszta, <<",">>, [global]),
+            DMap = #{dtm => parse_dt(Dt), frame_type => Fid},
+            Values = process_fields(field_defs(Fid), RList, DMap),
+            #frame{type = maps:get(report_type, Values), device = Id, values = Values};
+        _ ->
+            #frame{type = invalid}
+    end.
 
 process_fields([], _, Acc) -> Acc;
 process_fields([F|Tail], [Val|VTail], Acc) ->
