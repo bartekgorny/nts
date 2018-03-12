@@ -24,6 +24,8 @@
 
 -export([get_value/1, get_value/2, reload/0]).
 
+-export([tweak_config/2]). %% ONLY for testing!!!
+
 -include("nts.hrl").
 -define(SERVER, ?MODULE).
 
@@ -59,6 +61,9 @@ get_value(Name, Default) ->
 reload() ->
     gen_server:call(?SERVER, reload).
 
+tweak_config(Key, Value) ->
+    gen_server:call(?SERVER, {tweak_config, Key, Value}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -81,6 +86,9 @@ init([]) ->
     {stop, Reason :: term(), NewState :: #state{}}).
 handle_call(reload, _From, State) ->
     reload_config(),
+    {reply, ok, State};
+handle_call({tweak_config, Key, Value}, _From, State) ->
+    modify_config(Key, Value),
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
@@ -137,6 +145,11 @@ do_reload_config() ->
     {ok, Data} = file:consult(Cf),
     lists:map(fun(H) -> ets:insert(runtime_config, H) end, Data),
     % notify whoever is interested
+    gen_event:notify(system_bus, config_changed),
+    ok.
+
+modify_config(Key, Value) ->
+    ets:insert(runtime_config, {Key, Value}),
     gen_event:notify(system_bus, config_changed),
     ok.
 

@@ -22,7 +22,8 @@ start_link(Ref, Socket, Transport, Opts) ->
 init(Ref, Socket, Transport, _Opts = []) ->
     Transport:setopts(Socket, [{active, true}]),
     ok = ranch:accept_ack(Ref),
-    server(Socket, Ref, Transport).
+    {DType, _, _} = Ref,
+    server(Socket, DType, Transport).
 
 server(Socket, DType, Transport) ->
     server(Socket, DType, Transport, <<"">>, undefined, undefined).

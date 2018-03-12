@@ -21,9 +21,10 @@
 all() ->
     [
         connect_and_disconnect,
-%%        connect_and_terminate, % not if we use ranch
+        connect_and_terminate, % not if we use ranch
         connect_and_stop,
-        buffering
+        buffering,
+        config_change
     ].
 
 init_per_suite(C) ->
@@ -127,6 +128,21 @@ buffering(_) ->
     ok = gen_tcp:send(Socket, P3),
     timer:sleep(50),
     assert_lat(Dev, 6.0),
+    ok.
+
+config_change(_) ->
+    La = {formula, tcp, 12345},
+    Lb = {formula, tcp, 23456},
+    Sa = start_device(),
+    ok = gen_tcp:send(Sa, <<"aaa">>),
+    {error, econnrefused} = gen_tcp:connect("localhost", 23456, []),
+    nts_config:tweak_config(listen, [La, Lb]),
+    timer:sleep(200),
+    ok = gen_tcp:send(Sa, <<"aaa">>),
+    {ok, _} = gen_tcp:connect("localhost", 23456, []),
+    nts_config:tweak_config(listen, [Lb]),
+    timer:sleep(200),
+    {error, closed} = gen_tcp:send(Sa, <<"aaa">>),
     ok.
 
 %%%===================================================================
