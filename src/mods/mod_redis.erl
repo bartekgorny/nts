@@ -16,10 +16,8 @@
 
 handle_publishstate(Acc, DevId, Loc) ->
     Key = <<"device-state-", DevId/binary>>,
-    ?ERROR_MSG("Key:~n~p~n~n", [Key]),
-    Conn = nts_redis:get_connection(),
     J = nts_utils:encode_location(Loc),
-    eredis:q(Conn, ["SET", Key, J]),
+    nts_redis:q(["SET", Key, J]),
     {ok, Acc}.
 
 

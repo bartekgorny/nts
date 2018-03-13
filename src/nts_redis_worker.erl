@@ -4,9 +4,9 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 24. Feb 2018 18:16
+%%% Created : 13. Mar 2018 22:42
 %%%-------------------------------------------------------------------
--module(nts_redis).
+-module(nts_redis_worker).
 -author("bartekgorny").
 
 -behaviour(gen_server).
@@ -15,7 +15,6 @@
 
 %% API
 -export([start_link/1]).
--export([q/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -29,50 +28,35 @@
 
 -record(state, {connection}).
 
-%%%===================================================================
-%%% API
-%%%===================================================================
-
--spec(start_link(map()) ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(Conf) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Conf], []).
-
-q(Q) ->
-    wpool:cast(redis_pool, Q).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-init([Conf]) ->
-    process_flag(trap_exit, true),
-    wpool:start(),
-    PoolOpts = [
-        {workers, 10},
-        {worker, {nts_redis_worker, Conf}}
-    ],
-    wpool:start_sup_pool(redis_pool, PoolOpts),
-    {ok, #state{}}.
+init(Conf) ->
+    Host = maps:get(host, Conf),
+    Port = maps:get(port, Conf, 6379),
+    Db = maps:get(db, Conf, 0),
+    Password = maps:get(password, Conf, ""),
+    Timeout = maps:get(timeout, Conf, 1000),
+    {ok, P} = eredis:start_link(Host, Port, Db, Password, Timeout),
+    {ok, #state{connection = P}}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast(_Request, State) ->
+handle_cast(Request, #state{connection = Conn} = State) ->
+    eredis:q(Conn, Request),
     {noreply, State}.
 
 handle_info(_Info, State) ->
     {noreply, State}.
 
--spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #state{}) -> term()).
 terminate(_Reason, _State) ->
-    wpool:stop_pool(redis_pool),
     ok.
 
--spec(code_change(OldVsn :: term() | {down, term()}, State :: #state{},
-    Extra :: term()) ->
-    {ok, NewState :: #state{}} | {error, Reason :: term()}).
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

@@ -57,9 +57,11 @@ handlers_for_testcase(_) ->
 
 
 redis_store(_) ->
+    timer:sleep(200),
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Dev} = nts_device:start_link(?DEVID),
     nts_device:process_frame(Dev, mkframe(-10, -20)),
+    timer:sleep(200),
     D = fromnow(-20),
     Conn = get_conn(),
     Rval = get_json_value(Conn, <<"device-state-01">>),

@@ -17,7 +17,12 @@ v datetime "almost equal"
 v refactor reprocessing to bring it closer to the main impl, otherwise I'll get nuts
 v indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne do floatfiltra)
 - zrefaktorować event handlery (te do system_bus)
-- ranch acceptor pool
+v ranch acceptor pool
 - komunikacja zwrotna z urządzeniem
 - behawior do hooków
-- pool redis
+- behawior do modułów
+v pool redis
+- redis eventy
+- RabbitMQ publikacja lokalizacji i zdarzeń
+- integracja przez XMPP
+- BERT?
