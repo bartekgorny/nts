@@ -19,10 +19,10 @@ v indeksowanie lokalizacji timestampem z czymś, a nie id bazodanowym (potrzebne
 - zrefaktorować event handlery (te do system_bus)
 v ranch acceptor pool
 - komunikacja zwrotna z urządzeniem
-- behawior do hooków
-- behawior do modułów
 v pool redis
-- redis eventy
+v redis eventy
 - RabbitMQ publikacja lokalizacji i zdarzeń
 - integracja przez XMPP
 - BERT?
+- REST API
+- cmdline API

@@ -18,6 +18,8 @@ handle_publishstate(Acc, DevId, Loc) ->
     Key = <<"device-state-", DevId/binary>>,
     J = nts_utils:encode_location(Loc),
     nts_redis:q(["SET", Key, J]),
+    nts_redis:q(["PUBLISH", Key, "new-location"]),
+    nts_redis:q(["PUBLISH", <<"device-state">>, DevId]),
     {ok, Acc}.
 
 

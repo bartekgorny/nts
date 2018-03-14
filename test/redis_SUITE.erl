@@ -22,7 +22,8 @@ all() ->
 %%    [idle_timeout].
 %%all(a) ->
     [
-        redis_store
+        redis_store,
+        redis_notifications
     ].
 
 init_per_suite(C) ->
@@ -71,6 +72,22 @@ redis_store(_) ->
     ?assertMatch(#{status := #{up := true}}, Data),
     ok.
 
+redis_notifications(_) ->
+    timer:sleep(200),
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    % subscribe
+    RecAll = subscribe(<<"device-state">>),
+    RecDev = subscribe(<<"device-state-01">>),
+    timer:sleep(200),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    timer:sleep(200),
+    % check received events
+    ?assertEqual([<<"01">>], get_events(RecAll)),
+    ?assertEqual([<<"new-location">>], get_events(RecDev)),
+    ok.
+
+
 
 %%%===================================================================
 %%% utils
@@ -108,8 +125,6 @@ mkframe(RecOffset, Offset, Vals) ->
            values = V,
            data = nts_utils:json_encode_map(V)}.
 
-
-
 add_handlers(Case) ->
     Handlers = handlers_for_testcase(Case),
     lists:map(fun nts_helpers:add_handler/1, Handlers).
@@ -135,3 +150,36 @@ get_value(Conn, Key) ->
 get_json_value(Conn, Key) ->
     nts_utils:json_decode_map(get_value(Conn, Key)).
 
+get_sub() ->
+    Conf = nts_config:get_value([modules, nts_redis]),
+    {ok, P} = eredis_sub:start_link(maps:to_list(Conf)),
+    P.
+
+subscribe(Channel) ->
+    Sub = get_sub(),
+    Receiver = spawn_link(fun () ->
+                              eredis_sub:controlling_process(Sub),
+                              eredis_sub:subscribe(Sub, [Channel]),
+                              receiver(Sub, [])
+                          end),
+    Receiver.
+
+receiver(Sub, Events) ->
+    receive
+        {giveme, Pid} ->
+            Pid ! Events,
+            receiver(Sub, []);
+        {subscribed, _, _} ->
+            eredis_sub:ack_message(Sub),
+            receiver(Sub, Events);
+        {message, _Channel, Event, _} ->
+            eredis_sub:ack_message(Sub),
+            receiver(Sub, [Event | Events])
+    end.
+
+get_events(Rec) ->
+    Rec ! {giveme, self()},
+    receive
+        Resp -> Resp
+    after 100 -> undefined
+    end.
