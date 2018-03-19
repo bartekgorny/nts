@@ -19,7 +19,7 @@
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
 -export([save_event/1, event_log/4, delete_events/3, clear_events/2]).
 -export([create_device/3, read_device/1, update_device/2, delete_device/1]).
--export([initialise_device/1, purge_device/1]).
+-export([purge_device/1]).
 -export([table_exists/1]). % needed for tests
 
 
@@ -50,6 +50,7 @@ query(Q) ->
     Ret.
 
 -spec query(pid(), list()) -> ok | {ok, term(), term()} | {error, term()}.
+%%% @doc this version is mostly meant to be used within transaction
 query(Conn, Q) ->
     log_query(Q),
     QType = hd(Q),
@@ -340,27 +341,24 @@ create_device(DevId, Type, Label) ->
         "," ++
         quote(Label) ++
         ", '{}')",
-    case query(Q) of
-        ok ->
-            initialise_device(DevId);
-        E ->
-            E
-    end.
-
--spec initialise_device(devid()) -> ok | {error, atom()}.
-initialise_device(DevId) ->
     Nid = <<"device_", DevId/binary>>,
-    case table_exists(Nid) of
-        true -> ok;
-        false ->
-            case do_initialise_device(Nid) of
-                {rollback, Why} ->
-                    {error, {rollback, Why}};
-                _ -> ok
-            end
+    case do_initialise_device(Q, Nid) of
+        {rollback, Why} ->
+            {error, {rollback, Why}};
+            _ -> ok
     end.
 
-do_initialise_device(Nid) ->
+do_initialise_device(CreateQuery, Nid) ->
+    InitQueries = get_queries_from_file(Nid),
+    transaction(fun(Conn) ->
+        lists:map(fun(Q) -> case query(Conn, Q) of
+                                ok -> ok;
+                                {[], []} -> ok
+                            end
+                  end, [CreateQuery | InitQueries])
+        end).
+
+get_queries_from_file(Nid) ->
     {ok, S} = file:read_file("priv/pg_device.sql"),
     NS = binary:replace(S, <<"device_01">>, Nid, [global]),
     NSL1 = binary:split(NS, <<"\n">>, [global]),
@@ -368,14 +366,7 @@ do_initialise_device(Nid) ->
     NS2 = lists:foldl(fun(E, A) -> <<A/binary, E/binary>> end, <<>>, NSL2),
     NSList = binary:split(NS2, <<";">>, [global]),
     NSListF = lists:filter(fun(Z) -> Z =/= <<>> end, NSList),
-    NSListL = lists:map(fun binary_to_list/1, NSListF),
-    transaction(fun(Conn) ->
-        lists:map(fun(Q) -> case query(Conn, Q) of
-                                ok -> ok;
-                                {[], []} -> ok
-                            end
-                  end, NSListL)
-        end).
+    lists:map(fun binary_to_list/1, NSListF).
 
 -spec purge_device(devid()) -> ok | {error, atom()}.
 purge_device(DevId) ->

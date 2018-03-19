@@ -17,25 +17,38 @@
 
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
-     errors, metrics, events, device, transaction].
-%%   [locs_and_frames].
+     errors, metrics, events, device, transaction, device_failedinit].
+%%   [device_failedinit].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
     nts_helpers:clear_tables(["device_01", "current", "events", "device"]),
     nts_helpers:get_priv_files(),
-    nts_db:initialise_device(?DEVID),
+    nts_db:create_device(?DEVID, formula, "hej"),
     C.
 
+init_per_testcase(device_failedinit, Config) ->
+    {ok, F} = file:read_file("priv/pg_device.sql"),
+    [{devsql, F} | Config];
+init_per_testcase(_, Config) ->
+    Config.
+
 end_per_testcase(device, _) ->
-    nts_db:delete_device(<<"0123">>),
-    nts_db:purge_device(<<"0123">>),
+    purge(<<"0123">>),
+    ok;
+end_per_testcase(device_failedinit, Config) ->
+    restore_pg_file(Config),
+    purge(<<"0123">>),
     ok;
 end_per_testcase(_, _) ->
     ok.
 
 end_per_suite(_Config) ->
     application:stop(nts).
+
+purge(D) ->
+    nts_db:delete_device(D),
+    nts_db:purge_device(D).
 
 locs_and_frames(_) ->
     undefined = nts_db:last_loc(?DEVID, fromnow(-10)),
@@ -185,13 +198,21 @@ device(_) ->
     ok = nts_db:update_device(<<"0123">>, #{cos => 99}),
     {_, _, _, Conf} = nts_db:read_device(<<"0123">>),
     ?assertEqual(99, maps:get(cos, Conf)),
-    nts_db:initialise_device(<<"0123">>), % already run, should be idempotent
     [] = nts_db:history(<<"0123">>),
     ok = nts_db:delete_device(<<"0123">>),
     undefined = nts_db:read_device(<<"0123">>),
     [] = nts_db:history(<<"0123">>),
     nts_db:purge_device(<<"0123">>),
     {error, _} = nts_db:history(<<"0123">>),
+    ok.
+
+device_failedinit(Config) ->
+    % what if device initialisation fails? does the situation remain clean,
+    % or do we have some leftovers?
+    break_pg_file(),
+    {error, {rollback, _}} = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
+    restore_pg_file(Config),
+    ok = nts_db:create_device(<<"0123">>, formula, <<"razdwatrzy">>),
     ok.
 
 transaction(_) ->
@@ -226,3 +247,11 @@ get_metric_values(MList) ->
 
 metric_dif(Start, Stop) ->
     lists:map(fun({{ok, A}, {ok, B}}) -> B - A end, lists:zip(Start, Stop)).
+
+break_pg_file() ->
+    file:write_file("priv/pg_device.sql", <<"plepleple;">>).
+
+restore_pg_file(Config) ->
+    S = proplists:get_value(devsql, Config),
+    file:write_file("priv/pg_device.sql", S),
+    ok.
