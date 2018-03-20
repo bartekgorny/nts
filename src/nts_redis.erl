@@ -39,7 +39,7 @@ start_link(Conf) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [Conf], []).
 
 q(Q) ->
-    wpool:cast(redis_pool, Q).
+    wpool:cast(redis_pool, Q, random_worker).
 
 %%%===================================================================
 %%% gen_server callbacks
