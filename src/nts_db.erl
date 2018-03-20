@@ -13,7 +13,7 @@
 
 %% API
 -export([query/1, history/1, history/3, save_loc/4]).
--export([query/2, transaction/1]).
+-export([query/3, transaction/1]).
 -export([frames/3, save_frame/2, update_loc/4, update_state/2, update_coords/4]).
 -export([full_history/3]).
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
@@ -26,32 +26,11 @@
 -spec query(list()) -> ok | {ok, term(), term()} | {error, term()}.
 query(Q) ->
     log_query(Q),
-    QType = hd(Q),
     Conn = nts_db_conn:get_connection(),
-    nts_metrics:up([db, ops]),
-    Ret = case {QType, epgsql:squery(Conn, Q)} of
-              {$D, {ok, 0}} -> ok; % deleted 0 rows
-              {_, {ok, Types, Values}} -> {Types, Values};
-              {_, {ok, 0}} ->
-                  nts_metrics:up([db, failed_ops]),
-                  {error, op_failed};
-              {_, {ok, _}} -> ok;
-              {_, {error, #error{codename = EName}}} ->
-                  nts_metrics:up([db, failed_ops]),
-                  {error, EName}
-          end,
-    case Ret of
-        {error, E} ->
-            ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]);
-        _ ->
-            ok
-    end,
-    nts_db_conn:free_connection(Conn),
-    Ret.
+    query(Conn, Q, fun or_error/2).
 
--spec query(pid(), list()) -> ok | {ok, term(), term()} | {error, term()}.
-%%% @doc this version is mostly meant to be used within transaction
-query(Conn, Q) ->
+-spec query(pid(), list(), fun()) -> ok | {ok, term(), term()} | {error, term()}.
+query(Conn, Q, OnFailure) ->
     log_query(Q),
     QType = hd(Q),
     nts_metrics:up([db, ops]),
@@ -66,15 +45,20 @@ query(Conn, Q) ->
                   nts_metrics:up([db, failed_ops]),
                   {error, EName}
           end,
-    case Ret of
-        {error, E} ->
-            ?ERROR_MSG("ERRRRRR:~n~p~n~n", [E]),
-            throw(stop_that_transaction);
-        _ ->
-            ok
-    end,
+    OnFailure(Ret, Q),
     nts_db_conn:free_connection(Conn),
     Ret.
+
+or_error(Q, {error, E}) ->
+    ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]);
+or_error(_, _) ->
+    ok.
+
+or_abort(_, {error, E}) ->
+    ?ERROR_MSG("ERRRRRR:~n~p~n~n", [E]),
+    throw(stop_that_transaction);
+or_abort(_, _) ->
+    ok.
 
 transaction(F) ->
     Conn = nts_db_conn:get_connection(),
@@ -351,7 +335,7 @@ create_device(DevId, Type, Label) ->
 do_initialise_device(CreateQuery, Nid) ->
     InitQueries = get_queries_from_file(Nid),
     transaction(fun(Conn) ->
-        lists:map(fun(Q) -> case query(Conn, Q) of
+        lists:map(fun(Q) -> case query(Conn, Q, fun or_abort/2) of
                                 ok -> ok;
                                 {[], []} -> ok
                             end
