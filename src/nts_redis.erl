@@ -33,6 +33,10 @@
 %%% API
 %%%===================================================================
 
+%%I am not actually sure we need gen_server, traping exit and terminate
+%%here, maybe we could get by with just a start function (like
+%%in nts_db)
+
 -spec(start_link(map()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(Conf) ->

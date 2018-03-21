@@ -18,6 +18,7 @@ start(_StartType, _StartArgs) ->
     nts_metrics:create_metrics(),
     SupPid = nts_sup:start_link(),
     nts_modules_sup:reload(),
+    nts_db:start(),
     SupPid.
 
 %%--------------------------------------------------------------------

@@ -30,8 +30,6 @@ start_link() ->
 init([]) ->
     SysBus = #{id => system_bus,
                start => {gen_event, start_link, [{local, system_bus}]}},
-    DbConnector = #{id => db_connector,
-                    start => {nts_db_conn, start_link, []}},
     Config = #{id => config_manager,
                start => {nts_config, start_link,[]}},
     Hooks = #{id => hook_manager,
@@ -41,7 +39,7 @@ init([]) ->
             start => {nts_tcp_sup, start_link, []}},
     Mods = #{id => module_manager,
              start => {nts_modules_sup, start_link, []}},
-    Children = [SysBus, Config, DbConnector, Hooks, Tcp, Mods],
+    Children = [SysBus, Config, Hooks, Tcp, Mods],
     {ok, { {one_for_one, 2, 20}, Children} }.
 
 %%====================================================================

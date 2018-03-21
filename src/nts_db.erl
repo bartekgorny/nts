@@ -12,8 +12,10 @@
 -include_lib("epgsql/include/epgsql.hrl").
 
 %% API
+-export([start/0]).
 -export([query/1, history/1, history/3, save_loc/4]).
 -export([query/3, transaction/1]).
+-export([or_abort/2, or_error/2]).
 -export([frames/3, save_frame/2, update_loc/4, update_state/2, update_coords/4]).
 -export([full_history/3]).
 -export([current_state/1, last_loc/2, last_loc/1, last_state/1, last_state/2]).
@@ -23,13 +25,22 @@
 -export([table_exists/1]). % needed for tests
 
 
+start() ->
+    wpool:start(),
+    PoolOpts = [
+        {workers, 10},
+        {worker, {nts_db_conn, undefined}}
+    ],
+    wpool:start_sup_pool(db_pool, PoolOpts),
+    ok.
+
+
 -spec query(list()) -> ok | {ok, term(), term()} | {error, term()}.
 query(Q) ->
-    log_query(Q),
-    Conn = nts_db_conn:get_connection(),
-    query(Conn, Q, fun or_error/2).
+    wpool:call(db_pool, {query, Q}).
 
--spec query(pid(), list(), fun()) -> ok | {ok, term(), term()} | {error, term()}.
+-spec query(pid(), list(), fun((string(), term()) -> ok)) ->
+    ok | {ok, term(), term()} | {error, term()}.
 query(Conn, Q, OnFailure) ->
     log_query(Q),
     QType = hd(Q),
@@ -46,11 +57,11 @@ query(Conn, Q, OnFailure) ->
                   {error, EName}
           end,
     OnFailure(Ret, Q),
-    nts_db_conn:free_connection(Conn),
     Ret.
 
 or_error(Q, {error, E}) ->
-    ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]);
+    ?ERROR_MSG("Error running query:~n~p:~n~p~n~n", [Q, E]),
+    ok;
 or_error(_, _) ->
     ok.
 
@@ -61,10 +72,7 @@ or_abort(_, _) ->
     ok.
 
 transaction(F) ->
-    Conn = nts_db_conn:get_connection(),
-    Ret = epgsql:with_transaction(Conn, F),
-    nts_db_conn:free_connection(Conn),
-    Ret.
+    wpool:call(db_pool, {transaction , F}).
 
 -spec history(devid()) -> [loc()] | {error, atom()}.
 history(DevId) ->

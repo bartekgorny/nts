@@ -15,8 +15,6 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
--export([get_connection/0, free_connection/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -31,24 +29,10 @@
 
 -record(state, {connection}).
 
-
-
 %%%===================================================================
 %%% API
 %%%===================================================================
 
--spec get_connection() -> epgsql:connection().
-get_connection() ->
-    gen_server:call(?SERVER, get_connection, ?CONN_TIMEOUT).
-
--spec free_connection(epgsql:connection()) -> ok.
-free_connection(_Conn) ->
-    ok.
-
--spec(start_link() ->
-    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -57,25 +41,21 @@ start_link() ->
 -spec(init(Args :: term()) ->
     {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore).
-init([]) ->
+init(_) ->
     process_flag(trap_exit, true), % so that it calls terminate
     Conn = connect(),
     {ok, #state{connection = Conn}}.
 
--spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #state{}) ->
-    {reply, Reply :: term(), NewState :: #state{}} |
-    {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
-    {noreply, NewState :: #state{}} |
-    {noreply, NewState :: #state{}, timeout() | hibernate} |
-    {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
-    {stop, Reason :: term(), NewState :: #state{}}).
+handle_call({query, Q}, _From, #state{connection = Conn} = State) ->
+    Res = nts_db:query(Conn, Q, fun nts_db:or_error/2),
+    {reply, Res, State};
+handle_call({transaction, F}, _From, #state{connection = Conn} = State) ->
+    Res = epgsql:with_transaction(Conn, F),
+    {reply, Res, State};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call({stop, Reason}, _From, State) ->
     {stop,  Reason, ok, State};
-handle_call(get_connection, _From, State) ->
-    {reply, State#state.connection, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 

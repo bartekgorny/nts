@@ -18,7 +18,7 @@
 all() ->
     [locs_and_frames, frames_and_updates, current_state, concurrency,
      errors, metrics, events, device, transaction, device_failedinit].
-%%   [device_failedinit].
+%%   [transaction].
 
 init_per_suite(C) ->
     application:ensure_all_started(nts),
@@ -149,7 +149,7 @@ concurrency(_) ->
     Count = 200,
     lists:map(fun(_) -> spawn(F) end, lists:seq(1, Count)),
     % a brief pause so that all processes can send their queries before we do
-    timer:sleep(100),
+    timer:sleep(200),
     Res = nts_db:query("SELECT count(*) FROM device_01 WHERE frame='abc'"),
     {_, [{Br}]} = Res,
     ?assertEqual(Count, binary_to_integer(Br)),
