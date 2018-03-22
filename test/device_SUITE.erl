@@ -45,7 +45,8 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(CaseName, C) ->
-    nts_helpers:clear_tables(["device", "device_01", "events", "current"]),
+    lists:map(fun rmdev/1, [<<"01">>, <<"02">>, <<"03">>]),
+    nts_helpers:clear_tables(["events", "current"]),
     event_listener:start_link(),
     add_handlers(CaseName),
     C.
@@ -613,3 +614,7 @@ flush_device_events() ->
     Events = event_listener:flush(),
     [E || {[device|_], E} <- Events].
 
+rmdev(DevId) ->
+    nts_db:delete_device(DevId),
+    nts_db:purge_device(DevId),
+    ok.

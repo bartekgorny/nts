@@ -25,13 +25,14 @@
 -include_lib("nts/src/nts.hrl").
 
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
-                config = #{}, up = false, reproc_timer = undefined}).
+                config = #{}, up = false, reproc_timer = undefined,
+                socket}).
 -type state() :: #state{devid :: devid(), device_type :: atom(), label :: binary(),
                         loc :: loc() | undefined, internaldata :: map(),
                         config :: map(), up :: boolean(), reproc_timer :: any()}.
 
 %% API
--export([start_link/1, start_link/2, stop/1]).
+-export([start_link/1, start_link/3, stop/1]).
 
 %% gen_statem callbacks
 -export([init/1,
@@ -44,6 +45,7 @@
 -export([process_frame/2, getstate/1, getstate/2, devid/1, config/1, device_type/1]).
 -export([get_config_param/2, add_event/2]).
 -export([reset/1, reprocess_data/2]).
+-export([send_to_device/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -61,10 +63,10 @@
 %%--------------------------------------------------------------------
 -spec(start_link(devid()) -> {ok, pid()} | ignore | {error, Reason :: term()}).
 start_link(DevId) ->
-    start_link(DevId, undefined).
+    start_link(DevId, undefined, undefined).
 
-start_link(DevId, Connector) ->
-    gen_statem:start_link({global, DevId}, ?MODULE, [DevId, Connector], []).
+start_link(DevId, Connector, Socket) ->
+    gen_statem:start_link({global, DevId}, ?MODULE, [DevId, Connector, Socket], []).
 
 stop(Pid) ->
     gen_statem:stop(Pid).
@@ -124,11 +126,15 @@ add_event(Evt, Internal) ->
 reprocess_data(Dev, From) ->
     gen_statem:call(Dev, {reprocess_data, From}).
 
+-spec send_to_device(pid(), iolist()) -> ok.
+send_to_device(Dev, Data) ->
+    gen_statem:call(Dev, {send_data, Data}).
+
 %%%===================================================================
 %%% gen_statem
 %%%===================================================================
 
-init([DevId, Connection]) ->
+init([DevId, Connection, Socket]) ->
     case Connection of
         undefined -> ok;
         Pid when is_pid(Pid) ->
@@ -136,7 +142,7 @@ init([DevId, Connection]) ->
     end,
     process_flag(trap_exit, true),
     State = initialize_device(DevId),
-    {ok, normal, State}.
+    {ok, normal, State#state{socket = Socket}}.
 
 callback_mode() -> [state_functions].
 
@@ -165,6 +171,9 @@ normal({call, From}, #frame{} = Frame, State) ->
 normal(T, Event, State) ->
     handle_event(T, Event, normal, State).
 
+handle_event({call, From}, {send_data, Data}, _StateName, #state{socket = Socket}) ->
+    gen_tcp:send(Socket, Data),
+    {keep_state_and_data, [{reply, From, ok}]};
 handle_event({call, From}, get_state, _StateName, State) ->
     {keep_state_and_data, [{reply, From, State#state.loc}]};
 handle_event({call, From}, reset_internal_state, _StateName, State) ->

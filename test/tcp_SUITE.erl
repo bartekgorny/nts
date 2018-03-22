@@ -21,9 +21,9 @@
 all() ->
     [
         connect_and_disconnect,
-        connect_and_terminate, % not if we use ranch
         connect_and_stop,
         buffering,
+        sending_to_device,
         config_change
     ].
 
@@ -34,7 +34,9 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(_CaseName, C) ->
-    nts_helpers:clear_tables(["device", "device_00001", "events", "current"]),
+    nts_helpers:clear_tables(["events", "current"]),
+    nts_db:delete_device(?DEVID),
+    nts_db:purge_device(?DEVID),
     timer:sleep(200), % to make sure tcp starts
     C.
 
@@ -143,6 +145,21 @@ config_change(_) ->
     nts_config:tweak_config(listen, [Lb]),
     timer:sleep(200),
     {error, closed} = gen_tcp:send(Sa, <<"aaa">>),
+    % TODO find out why after this test a standard listener does not work
+    % even if we tweak configuration back to initial
+    ok.
+
+sending_to_device(_) ->
+    start_device(),
+    Dev = global:whereis_name(?DEVID),
+    timer:sleep(100),
+    nts_device:send_to_device(Dev, "pleple"),
+    timer:sleep(100),
+    receive
+        {tcp, _, "pleple"} -> ok
+    after 1000 ->
+        ct:fail("no pleple received")
+    end,
     ok.
 
 %%%===================================================================

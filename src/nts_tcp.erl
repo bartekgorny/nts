@@ -37,7 +37,8 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
                           Frame = nts_frame:parse(DType, D),
                           {DeviceId, Device} = get_device(DevId0,
                                                           Frame#frame.device,
-                                                          Dev0),
+                                                          Dev0,
+                                                          Socket),
                           maybe_process_frame(Device, Frame),
                           {DeviceId, Device}
                       end,
@@ -61,12 +62,12 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
             exit(unexpected_tcp_termination)
     end.
 
-get_device(undefined, undefined, undefined) ->
+get_device(undefined, undefined, undefined, _) ->
     {undefined, undefined};
-get_device(undefined, DevId, undefined) ->
-    {ok, Dev} = nts_device:start_link(DevId, self()),
+get_device(undefined, DevId, undefined, Socket) ->
+    {ok, Dev} = nts_device:start_link(DevId, self(), Socket),
     {DevId, Dev};
-get_device(DevId, _, Dev) when is_pid(Dev) ->
+get_device(DevId, _, Dev, _) when is_pid(Dev) ->
     {DevId, Dev}.
 
 maybe_process_frame(undefined, _) ->
