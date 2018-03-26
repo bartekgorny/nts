@@ -4,7 +4,6 @@ v zm. gen_fsm na gen_statem
 v pool postgres
 v get fresh loc on dev startup
 v save loc
-- eventologia
 v mappingi
 v reprocessing data (also with failure)
 v deploying devices
@@ -26,4 +25,4 @@ v redis eventy
 - BERT?
 - REST API
 - cmdline API
-- zwrotka z urządzenia po otrzymaniu ramki
+v zwrotka z urządzenia po otrzymaniu ramki

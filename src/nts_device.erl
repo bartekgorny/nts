@@ -172,8 +172,8 @@ normal({call, From}, #frame{} = Frame, State) ->
 normal(T, Event, State) ->
     handle_event(T, Event, normal, State).
 
-handle_event({call, From}, {send_data, Data}, _StateName, #state{socket = Socket}) ->
-    gen_tcp:send(Socket, Data),
+handle_event({call, From}, {send_data, Data}, _StateName, State) ->
+    send_data(Data, State),
     {keep_state_and_data, [{reply, From, ok}]};
 handle_event({call, From}, get_state, _StateName, State) ->
     {keep_state_and_data, [{reply, From, State#state.loc}]};
@@ -326,6 +326,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
                 _ ->
                     NewState = NewState0#state{loc = NewLocation,
                                                internaldata = NewInternal},
+                    maybe_ack(HookResult, NewState),
                     maybe_publish_state(Origin, State#state.devid, NewLocation),
                     NewState
             end
@@ -342,6 +343,10 @@ maybe_publish_state(new, DevId, Loc) ->
     nts_hooks:run(publish_state, [], [DevId, Loc]);
 maybe_publish_state(_, _, _) ->
     ok.
+
+maybe_ack(#hookresult{ack = Acks}, State) ->
+    lists:map(fun(D) -> send_data(D, State) end,
+              lists:reverse(Acks)).
 
 %% @doc we do it once, after receiving frame, using either new location (before saving in case
 %% it crashes), or old one if loc processing errored out
@@ -404,3 +409,7 @@ cancel_reproc_timer(#state{reproc_timer = undefined} = State) ->
 cancel_reproc_timer(#state{reproc_timer = Timer} = State) ->
     timer:cancel(Timer),
     State#state{reproc_timer = undefined}.
+
+send_data(Data, #state{socket = Socket}) ->
+    gen_tcp:send(Socket, Data),
+    ok.

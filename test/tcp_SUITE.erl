@@ -24,6 +24,7 @@ all() ->
         connect_and_stop,
         buffering,
         sending_to_device,
+        send_ack,
         config_change
     ].
 
@@ -33,6 +34,9 @@ init_per_suite(C) ->
     nts_helpers:get_priv_files(),
     C.
 
+init_per_testcase(send_ack, C) ->
+    nts_helpers:add_handler(procloc, {generic, tcp_SUITE, handler_send_ack, 90}),
+    init_per_testcase(generic, C);
 init_per_testcase(_CaseName, C) ->
     nts_helpers:clear_tables(["events", "current"]),
     nts_db:delete_device(?DEVID),
@@ -40,6 +44,9 @@ init_per_testcase(_CaseName, C) ->
     timer:sleep(200), % to make sure tcp starts
     C.
 
+end_per_testcase(send_ack, C) ->
+    nts_helpers:remove_handler(procloc, {generic, tcp_SUITE, handler_send_ack, 90}),
+    end_per_testcase(generic, C);
 end_per_testcase(_CaseName, _) ->
     case global:whereis_name(?DEVID) of
         undefined -> ok;
@@ -155,11 +162,14 @@ sending_to_device(_) ->
     timer:sleep(100),
     nts_device:send_to_device(Dev, "pleple"),
     timer:sleep(100),
-    receive
-        {tcp, _, "pleple"} -> ok
-    after 1000 ->
-        ct:fail("no pleple received")
-    end,
+    assert_receive("pleple"),
+    ok.
+
+send_ack(_) ->
+    start_device(),
+    _Dev = global:whereis_name(?DEVID),
+    timer:sleep(100),
+    assert_receive("okthanks"),
     ok.
 
 %%%===================================================================
@@ -186,3 +196,19 @@ assert_lat(Dev, Lat) ->
     Loc = nts_device:getstate(Dev),
     {A, _} = nts_location:coords(Loc),
     ?assertEqual(Lat, A).
+
+assert_receive(S) ->
+    receive
+        {tcp, _, S} ->
+            ok
+    after 1000 ->
+        ct:fail("string '~p' not received", [S])
+    end.
+
+%%%===================================================================
+%%% handlers
+%%%===================================================================
+
+handler_send_ack(location, _Frame, _OldLoc, HookRes, Internal, _State) ->
+    {ok, HookRes#hookresult{ack = [<<"okthanks">>]}, Internal}.
+
