@@ -17,10 +17,11 @@
 -export([filter_loc/3]).
 -export([handle_input/6]).
 
--spec handle_input(frametype(), frame(), loc(), loc(), internal(),
-    nts_device:state()) ->
-    {ok, loc(), internal()}.
-handle_input(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
+-spec handle_input(frametype(), frame(), loc(), hookresult(), internal(),
+                   nts_device:state()) ->
+    {ok, hookresult(), internal()}.
+handle_input(location, Frame, _OldLoc, HookRes, Internal, _State) ->
+    #hookresult{newloc = NewLoc} = HookRes,
     Sat = nts_frame:get(sat, Frame),
     {Lat, Lon} = nts_location:coords(NewLoc),
     % extract key data so as not to store the whole loc in state
@@ -35,7 +36,8 @@ handle_input(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
                        nts_location:coords(Nlat, Nlon,
                            nts_location:dtm(Ndtm, NewLoc))
                end,
-    {ok, FixedLoc, maps:put(stabiliser_state, StabState, Internal)}.
+    {ok, HookRes#hookresult{newloc = FixedLoc},
+         maps:put(stabiliser_state, StabState, Internal)}.
 
 -define(IGNORE_TRESHOLD, 600).
 -define(MIN_SAT, 4).

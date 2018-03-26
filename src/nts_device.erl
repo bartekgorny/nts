@@ -24,6 +24,8 @@
 -behaviour(gen_statem).
 -include_lib("nts/src/nts.hrl").
 
+%% 'internal' is a place where location processing modules can store their
+%% own internal state, like trail for float detection etc.
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
                 config = #{}, up = false, reproc_timer = undefined,
                 socket}).
@@ -117,10 +119,9 @@ get_config_param(ParamName, State) ->
         V -> V
     end.
 
--spec add_event(event(), internal()) -> internal().
-add_event(Evt, Internal) ->
-    EventQueue = maps:get(new_events, Internal, []),
-    maps:put(new_events, [Evt|EventQueue], Internal).
+-spec add_event(event(), hookresult()) -> hookresult().
+add_event(Evt, #hookresult{events = EventQueue} = HookRes) ->
+    HookRes#hookresult{events = [Evt | EventQueue]}.
 
 -spec reprocess_data(pid(), datetime()) -> ok.
 reprocess_data(Dev, From) ->
@@ -244,14 +245,14 @@ update_current_down(DevId, Loc) ->
             ok
     end.
 
-flush_events(new, Internal) ->
-    flush_events([save, publish], Internal);
-flush_events(reproc, Internal) ->
-    flush_events([save], Internal);
+flush_events(new, HookResult) ->
+    flush_events([save, publish], HookResult);
+flush_events(reproc, HookResult) ->
+    flush_events([save], HookResult);
 
-flush_events(Tasks, Internal) when is_list(Tasks) ->
-    process_events(Tasks, maps:get(new_events, Internal, [])),
-    maps:remove(new_events, Internal).
+flush_events(Tasks, #hookresult{events = Events} ) when is_list(Tasks) ->
+    process_events(Tasks, Events),
+    ok.
 
 process_events([], _Q) ->
     ok;
@@ -286,11 +287,12 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Frame, nts_location:new()),
+    HookRes = #hookresult{ newloc = NewLoc},
     case nts_hooks:run_procloc(State#state.device_type,
                                Frame#frame.type,
                                Frame,
                                OldLocation,
-                               NewLoc,
+                               HookRes,
                                State#state.internaldata,
                                State) of
         {error, E} ->
@@ -309,20 +311,21 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
                                            Frame, State#state.internaldata]),
             maybe_publish_state(Origin, State#state.devid, NewLocation1),
             NewState;
-        {NewLocation0, NewInternal} ->
+        {HookResult, NewInternal} ->
+            NewLocation0 = HookResult#hookresult.newloc,
             NewLocation = maybe_set_status_up(Origin, OrigLoc, NewLocation0),
             NewState0 = maybe_emit_device_up(Origin, Frame, NewLocation, State),
             % save and possibly publish events created by handlers
-            NewInternal1 = flush_events(Origin, NewInternal),
+            flush_events(Origin, HookResult),
             % save frame and location and publish state
             case nts_hooks:run(save_state, [],
                                [NewState0#state.devid, NewLocation,
-                                Frame, NewInternal1]) of
+                                Frame, NewInternal]) of
                 {error, _} ->
                     {exit, error_saving_data};
                 _ ->
                     NewState = NewState0#state{loc = NewLocation,
-                                               internaldata = NewInternal1},
+                                               internaldata = NewInternal},
                     maybe_publish_state(Origin, State#state.devid, NewLocation),
                     NewState
             end

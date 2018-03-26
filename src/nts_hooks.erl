@@ -38,10 +38,10 @@ start_link() ->
                   InputType :: atom() | [atom()],
                   InputData :: frame(),
                   OldLoc :: loc(),
-                  NewLoc :: loc(),
+                  HookResult :: hookresult(),
                   Internal :: map(),
-                  State :: term()) -> {loc(), map()} | {error, term()}.
-run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, Internal, State) ->
+                  State :: term()) -> {hookresult(), map()} | {error, term()}.
+run_procloc(DeviceType, InputType, InputData, OldLoc, HookResult, Internal, State) ->
     Section = case ets:lookup(hooks, procloc) of
                   [] -> [];
                   [{_, HSection}] -> HSection
@@ -50,7 +50,7 @@ run_procloc(DeviceType, InputType, InputData, OldLoc, NewLoc, Internal, State) -
                    undefined -> proplists:get_value(generic, Section, []);
                    Lst -> Lst
                end,
-    run_loc_handlers(Handlers, InputType, InputData, OldLoc, NewLoc, 
+    run_loc_handlers(Handlers, InputType, InputData, OldLoc, HookResult,
                      Internal, State).
 
 -spec run(Section :: atom(), Acc :: any(), Args :: [any()]) -> any().

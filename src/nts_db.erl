@@ -35,7 +35,7 @@ start() ->
     ok.
 
 
--spec query(list()) -> ok | {ok, term(), term()} | {error, term()}.
+-spec query(list()) -> ok | {[term()], [term()]} | {error, term()}.
 query(Q) ->
     wpool:call(db_pool, {query, Q}).
 

@@ -24,10 +24,11 @@
 %% test API
 -export([map_sensor/5, sensor_defs/1]).
 
--spec handle_input(frametype(), frame(), loc(), loc(), internal(),
+-spec handle_input(frametype(), frame(), loc(), hookresult(), internal(),
                    nts_device:state()) ->
-    {ok, loc(), internal()}.
-handle_input(location, Frame, OldLoc, NewLoc, Internal, State) ->
+    {ok, hookresult(), internal()}.
+handle_input(location, Frame, OldLoc, HookResult, Internal, State) ->
+    #hookresult{newloc = NewLoc} = HookResult,
     Mappings = maps:get(sensor_mapping, nts_device:config(State), #{}),
     SDefs = sensor_defs(nts_device:device_type(State)),
     % copy old values, some of them will be ovewrriten
@@ -41,7 +42,7 @@ handle_input(location, Frame, OldLoc, NewLoc, Internal, State) ->
                           end,
                           NewLoc0,
                           maps:to_list(Frame#frame.values)),
-    {ok, NewLoc1, Internal}.
+    {ok, HookResult#hookresult{ newloc = NewLoc1}, Internal}.
 
 
 map_sensor(NewLoc, FromName, Val, OldLoc, SDefs, Mappings) ->

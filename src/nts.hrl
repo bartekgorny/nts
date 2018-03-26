@@ -23,6 +23,9 @@
 -type event() :: #event{id :: integer(), device :: devid(), dtm :: datetime(), lat :: float(),
                         lon :: float(), type :: eventtype(), data :: map()}.
 
+-record(hookresult, {newloc, events = [], ack = []}).
+-type hookresult() :: #hookresult{ newloc :: loc(), events :: [event()],
+                                  ack :: [binary()]}.
 
 %% 'hex' tells us if it is a string to be stored as-is, or a binary data which need to be hexlified
 %% for storage.

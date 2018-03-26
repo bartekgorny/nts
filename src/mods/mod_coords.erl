@@ -13,11 +13,14 @@
 -export([handle_input/6]).
 
 
-handle_input(location, Frame, _OldLoc, NewLoc, Internal, _State) ->
+handle_input(location, Frame, _OldLoc, #hookresult{newloc = NewLoc} = HookRes,
+             Internal, _State) ->
     Data = Frame#frame.values,
     Lat = maps:get(latitude, Data),
     Lon = maps:get(longitude, Data),
-    {ok, nts_location:coords(Lat, Lon, NewLoc), Internal};
-handle_input(_, _Frame, _OldLoc, NewLoc, Internal, _State) ->
-    {ok, NewLoc, Internal}.
+    {ok,
+     HookRes#hookresult{newloc = nts_location:coords(Lat, Lon, NewLoc)},
+     Internal};
+handle_input(_, _Frame, _OldLoc, HookRes, Internal, _State) ->
+    {ok, HookRes, Internal}.
 

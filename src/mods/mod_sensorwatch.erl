@@ -14,21 +14,22 @@
 
 -export([handle_input/6]).
 
--spec handle_input(frametype(), frame(), loc(), loc(), internal(),
+-spec handle_input(frametype(), frame(), loc(), hookresult(), internal(),
                    nts_device:state()) ->
-    {ok, loc(), internal()}.
-handle_input(location, _Frame, OldLoc, NewLoc, Internal, State) ->
+    {ok, hookresult(), internal()}.
+handle_input(location, _Frame, OldLoc, HookRes, Internal, State) ->
+    #hookresult{newloc = NewLoc} = HookRes,
     ToWatch = nts_device:get_config_param(event_triggering_sensors,
                                           State),
     DevId = nts_device:devid(State),
-    NewInternal = lists:foldl(fun(SName, L) ->
+    NewHookRes = lists:foldl(fun(SName, L) ->
                                   check_sensor(L, SName, DevId, OldLoc, NewLoc)
                               end,
-                              Internal,
+                              HookRes,
                               ToWatch),
-    {ok, NewLoc, NewInternal}.
+    {ok, NewHookRes, Internal}.
 
-check_sensor(Internal, SName, DevId, OldLoc, NewLoc) ->
+check_sensor(HookRes, SName, DevId, OldLoc, NewLoc) ->
     OldVal = nts_location:get(sensor, SName, OldLoc),
     NewVal = nts_location:get(sensor, SName, NewLoc),
     case has_changed(OldVal, NewVal) of
@@ -39,9 +40,9 @@ check_sensor(Internal, SName, DevId, OldLoc, NewLoc) ->
                                          NewLoc#loc.dtm,
                                          #{value => NewVal}
                 ),
-            nts_device:add_event(NEv, Internal);
+            nts_device:add_event(NEv, HookRes);
         false ->
-            Internal
+            HookRes
     end.
 
 has_changed(undefined, _) ->

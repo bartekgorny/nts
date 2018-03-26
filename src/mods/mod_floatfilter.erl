@@ -31,13 +31,14 @@
 
 -type locdata() :: map().
 
--spec handle_input(frametype(), frame(), loc(), loc(), internal(),
+-spec handle_input(frametype(), frame(), loc(), hookresult(), internal(),
                    nts_device:state()) ->
-    {ok, loc(), internal()}.
-handle_input(location, _Frame, _OldLoc, NewLoc, Internal, State) ->
+    {ok, hookresult(), internal()}.
+handle_input(location, _Frame, _OldLoc, HookRes, Internal, State) ->
     % if state changed to a definite state (different from the previous
     % definite state) create event data and return so that device can
     % generate an event.
+    #hookresult{newloc = NewLoc} = HookRes,
     FState0 = maps:get(floatstate, Internal, newstate()),
     FState = decode_state(FState0),
     NewLocData = mapify(NewLoc),
@@ -51,8 +52,8 @@ handle_input(location, _Frame, _OldLoc, NewLoc, Internal, State) ->
                     maps:get(trail, FState),
                     DevId),
     NewFStateEnc = encode_state(NewFState),
-    Internal1 = maybe_add_event(ModePrev, ModeNext, DevId, FixedLoc, Internal),
-    {ok, FixedLoc, Internal1#{floatstate => NewFStateEnc}}.
+    HookRes1 = maybe_add_event(ModePrev, ModeNext, DevId, FixedLoc, HookRes),
+    {ok, HookRes1#hookresult{newloc = FixedLoc}, Internal#{floatstate => NewFStateEnc}}.
 
 newstate() -> #{refloc => undefined, mode => {moving, true}, trail => []}.
 
@@ -150,17 +151,17 @@ maybe_fix_trail({moving, false}, {moving, true}, Trail, DevId) ->
 maybe_fix_trail(_, _, _, _) ->
     ok.
 
-maybe_add_event({stopped, _}, {moving, true}, DevId, Loc, Internal) ->
+maybe_add_event({stopped, _}, {moving, true}, DevId, Loc, HookRes) ->
     nts_device:add_event(nts_event:create_event([device, moving, started],
                                                 DevId,
                                                 Loc,
                                                 nts_location:dtm(Loc)),
-                         Internal);
-maybe_add_event({moving, _}, {stopped, true}, DevId, Loc, Internal) ->
+                         HookRes);
+maybe_add_event({moving, _}, {stopped, true}, DevId, Loc, HookRes) ->
     nts_device:add_event(nts_event:create_event([device, moving, stopped],
                                                 DevId,
                                                 Loc,
                                                 nts_location:dtm(Loc)),
-                         Internal);
-maybe_add_event(_, _, _, _, Internal) ->
-    Internal.
+                         HookRes);
+maybe_add_event(_, _, _, _, HookRes) ->
+    HookRes.
