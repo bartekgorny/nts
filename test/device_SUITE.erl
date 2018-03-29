@@ -19,7 +19,7 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() ->
-%%    [idle_timeout].
+%%    [invalid_frame].
 %%all(a) ->
     [
         simple_test,
@@ -35,7 +35,8 @@ all() ->
         reprocessing,
         stabiliser,
         floatfilter,
-        rewrite_buffered
+        rewrite_buffered,
+        invalid_frame
     ].
 
 init_per_suite(C) ->
@@ -443,6 +444,22 @@ rewrite_buffered(_) ->
     [E1, E2] = nts_db:event_log(?DEVID, [device], fromnow(-30), fromnow(0)),
     check_event({6, 16, [device, sensorchange, ignition]}, E1),
     check_event({9, 18, [device, activity, up]}, E2),
+    ok.
+
+invalid_frame(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    nts_device:process_frame(Dev, mkframe(-8, {1, 3, 3})),
+    check_coords({10, 20}, Dev), % not changed because of not enough sat
+    % but timestamps changed
+    RecDtm2 = fromnow(-8),
+    Dtm2 = fromnow(-8),
+    S2 = nts_device:getstate(Dev),
+    D2 = maps:get(status, S2#loc.data),
+    ?assertClose(RecDtm2, maps:get(last_signal, D2)),
+    ?assertClose(Dtm2, maps:get(last_signal_dtm, D2)),
+    has_error(false, Dev),
     ok.
 
 %%%===================================================================

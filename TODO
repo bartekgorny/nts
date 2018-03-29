@@ -26,3 +26,4 @@ v redis eventy
 - REST API
 - cmdline API
 v zwrotka z urządzenia po otrzymaniu ramki
+v handle invalid locations (carry-forward coords)

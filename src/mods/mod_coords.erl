@@ -13,11 +13,17 @@
 -export([handle_input/6]).
 
 
-handle_input(location, Frame, _OldLoc, #hookresult{newloc = NewLoc} = HookRes,
+handle_input(location, Frame, OldLoc, #hookresult{newloc = NewLoc} = HookRes,
              Internal, _State) ->
     Data = Frame#frame.values,
-    Lat = maps:get(latitude, Data),
-    Lon = maps:get(longitude, Data),
+    Sat = maps:get(sat, Data, undefined),
+    {Lat, Lon} = case Sat of
+                     undefined ->
+                         {maps:get(latitude, Data), maps:get(longitude, Data)};
+                     I when is_integer(I) andalso I > 3 ->
+                         {maps:get(latitude, Data), maps:get(longitude, Data)};
+                     _ -> nts_location:coords(OldLoc)
+                 end,
     {ok,
      HookRes#hookresult{newloc = nts_location:coords(Lat, Lon, NewLoc)},
      Internal};
