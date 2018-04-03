@@ -19,7 +19,7 @@
 -import(nts_helpers, [fromnow/1]).
 
 all() ->
-%%    [invalid_frame].
+%%    [event_frames].
 %%all(a) ->
     [
         simple_test,
@@ -462,6 +462,11 @@ invalid_frame(_) ->
     has_error(false, Dev),
     ok.
 
+event_frames(_) ->
+    ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
+    {ok, Dev} = nts_device:start_link(?DEVID),
+    ok.
+
 %%%===================================================================
 %%% utils
 %%%===================================================================
@@ -472,29 +477,19 @@ check_sensors(Dev, Exp) ->
         maps:to_list(Exp)).
 
 mkframe(Offset, {Lat, Lon}) ->
-    mkframe(Offset, {10, Lat, Lon});
+    mkframe(Offset, Offset, {10, Lat, Lon}, #{});
 mkframe(Offset, {Sat, Lat, Lon}) ->
+    mkframe(Offset, Offset, {Sat, Lat, Lon}, #{});
+mkframe(RecOffset, Offset) ->
+    mkframe(RecOffset, Offset, #{}).
+
+mkframe(RecOffset, Offset, {Sat, Lat, Lon}, Vals) ->
     Values = #{devid => ?DEVID,
                dtm => fromnow(Offset),
                latitude => Lat,
                longitude => Lon,
                sat => Sat,
                type => <<"location">>},
-    #frame{type = location,
-           id = nts_frame:generate_frame_id(),
-           device = ?DEVID,
-           received = fromnow(Offset),
-           values = Values,
-           data = nts_utils:json_encode_map(Values)};
-mkframe(RecOffset, Offset) ->
-    mkframe(RecOffset, Offset, #{}).
-
-mkframe(RecOffset, Offset, Vals) ->
-    Values = #{dtm => fromnow(Offset),
-               latitude => -RecOffset,
-               type => <<"location">>,
-               devid => ?DEVID,
-               longitude => -Offset},
     V = maps:merge(Values, Vals),
     #frame{type = location,
            id = nts_frame:generate_frame_id(),
@@ -503,6 +498,8 @@ mkframe(RecOffset, Offset, Vals) ->
            values = V,
            data = nts_utils:json_encode_map(V)}.
 
+mkframe(RecOffset, Offset, Vals) ->
+    mkframe(RecOffset, Offset, {10, -RecOffset, -Offset}, Vals).
 
 check_coords(Exp, Dev) ->
     S = nts_device:getstate(Dev),
