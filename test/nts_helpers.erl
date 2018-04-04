@@ -15,7 +15,7 @@
 -export([compare_near_dates/2, compare_near_dates/3]).
 -export([add_handler/1, remove_handler/1, add_handler/2, remove_handler/2]).
 -export([trace_funcs/1]).
--export([mkframe/4]).
+-export([mkframe/4, rmdev/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("nts/src/nts.hrl").
@@ -121,3 +121,7 @@ format_coord(I, F) ->
     Fn = string:left(integer_to_list(F), 6, $0),
     <<(list_to_binary(In))/binary, ".", (list_to_binary(Fn))/binary>>.
 
+rmdev(DevId) ->
+    nts_db:delete_device(DevId),
+    nts_db:purge_device(DevId),
+    ok.

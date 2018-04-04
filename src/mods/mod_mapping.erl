@@ -42,7 +42,9 @@ handle_input(location, Frame, OldLoc, HookResult, Internal, State) ->
                           end,
                           NewLoc0,
                           maps:to_list(Frame#frame.values)),
-    {ok, HookResult#hookresult{ newloc = NewLoc1}, Internal}.
+    {ok, HookResult#hookresult{ newloc = NewLoc1}, Internal};
+handle_input(_, _, _, HookResult, Internal, _) ->
+    {ok, HookResult, Internal}.
 
 
 map_sensor(NewLoc, FromName, Val, OldLoc, SDefs, Mappings) ->

@@ -27,6 +27,10 @@ handle_input(location, Frame, OldLoc, #hookresult{newloc = NewLoc} = HookRes,
     {ok,
      HookRes#hookresult{newloc = nts_location:coords(Lat, Lon, NewLoc)},
      Internal};
-handle_input(_, _Frame, _OldLoc, HookRes, Internal, _State) ->
-    {ok, HookRes, Internal}.
+handle_input(_, _Frame, OldLoc, #hookresult{newloc = NewLoc} = HookRes,
+             Internal, _State) ->
+    {Lat, Lon} = nts_location:coords(OldLoc),
+    {ok,
+     HookRes#hookresult{newloc = nts_location:coords(Lat, Lon, NewLoc)},
+     Internal}.
 

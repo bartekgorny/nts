@@ -9,8 +9,8 @@ v reprocessing data (also with failure)
 v deploying devices
 - changing mapping should reset device state and be stored in location so that we do same
   when reprocessing (otherwise old mapping result would stay there forever)
-- proc. heartbeats
-- proc. event frames
+v proc. heartbeats
+v proc. event frames
 - kalibracja
 v datetime "almost equal"
 v refactor reprocessing to bring it closer to the main impl, otherwise I'll get nuts

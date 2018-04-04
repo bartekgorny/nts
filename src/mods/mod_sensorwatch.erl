@@ -27,7 +27,9 @@ handle_input(location, _Frame, OldLoc, HookRes, Internal, State) ->
                               end,
                               HookRes,
                               ToWatch),
-    {ok, NewHookRes, Internal}.
+    {ok, NewHookRes, Internal};
+handle_input(_, _, _, HookResult, Internal, _) ->
+    {ok, HookResult, Internal}.
 
 check_sensor(HookRes, SName, DevId, OldLoc, NewLoc) ->
     OldVal = nts_location:get(sensor, SName, OldLoc),

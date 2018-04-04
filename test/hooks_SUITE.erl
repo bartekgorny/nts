@@ -17,7 +17,8 @@
 
 % copied from nts_device
 -record(state, {devid, device_type, label, loc = #loc{}, internaldata = #{},
-    config = #{}, up = false, reproc_timer = undefined}).
+                config = #{}, up = false, reproc_timer = undefined,
+                socket}).
 
 -compile(export_all).
 

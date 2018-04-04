@@ -46,7 +46,7 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(CaseName, C) ->
-    lists:map(fun rmdev/1, [<<"01">>, <<"02">>, <<"03">>]),
+    lists:map(fun nts_helpers:rmdev/1, [<<"01">>, <<"02">>, <<"03">>]),
     nts_helpers:clear_tables(["events", "current"]),
     event_listener:start_link(),
     add_handlers(CaseName),
@@ -465,6 +465,14 @@ invalid_frame(_) ->
 event_frames(_) ->
     ok = nts_db:create_device(?DEVID, formula, <<"razdwatrzy">>),
     {ok, Dev} = nts_device:start_link(?DEVID),
+    nts_device:process_frame(Dev, mkframe(-10, -20)),
+    nts_device:process_frame(Dev, mkeventframe(-10, -12, <<"alert">>)),
+    nts_device:process_frame(Dev, mkeventframe(-5, -7, <<"alert">>)),
+    [Evt1, Evt2] = nts_db:event_log(?DEVID, [device, alert],
+                           fromnow(-20), fromnow(0)),
+    ?assertEqual([device, alert], Evt1#event.type),
+    ?assertEqual([device, alert], Evt2#event.type),
+    ?assertEqual(10, Evt2#event.lat),
     ok.
 
 %%%===================================================================
@@ -499,7 +507,26 @@ mkframe(RecOffset, Offset, {Sat, Lat, Lon}, Vals) ->
            data = nts_utils:json_encode_map(V)}.
 
 mkframe(RecOffset, Offset, Vals) ->
+    % this one is the most used
     mkframe(RecOffset, Offset, {10, -RecOffset, -Offset}, Vals).
+
+mkeventframe(RecOffset, Offset, Type) ->
+    mkeventframe(RecOffset, Offset, Type, #{}).
+
+mkeventframe(RecOffset, Offset, Type, Vals) ->
+    mkeventframe(RecOffset, Offset, event, Type, Vals).
+
+mkeventframe(RecOffset, Offset, FrameType, Type, Vals) ->
+    Values = #{devid => ?DEVID,
+               dtm => fromnow(Offset),
+               type => Type},
+    V = maps:merge(Values, Vals),
+    #frame{type = FrameType,
+           id = nts_frame:generate_frame_id(),
+           device = ?DEVID,
+           received = fromnow(RecOffset),
+           values = V,
+           data = nts_utils:json_encode_map(V)}.
 
 check_coords(Exp, Dev) ->
     S = nts_device:getstate(Dev),
@@ -628,7 +655,3 @@ flush_device_events() ->
     Events = event_listener:flush(),
     [E || {[device|_], E} <- Events].
 
-rmdev(DevId) ->
-    nts_db:delete_device(DevId),
-    nts_db:purge_device(DevId),
-    ok.

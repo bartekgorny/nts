@@ -287,7 +287,7 @@ do_process_frame(Origin, OrigLoc, Frame, State) ->
     % clear previous error
     OldLocation = nts_location:remove(status, error, State#state.loc),
     NewLoc = set_timestamps(Frame, nts_location:new()),
-    HookRes = #hookresult{ newloc = NewLoc},
+    HookRes = #hookresult{newloc = NewLoc},
     case nts_hooks:run_procloc(State#state.device_type,
                                Frame#frame.type,
                                Frame,

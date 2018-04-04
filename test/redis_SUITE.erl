@@ -33,7 +33,8 @@ init_per_suite(C) ->
     C.
 
 init_per_testcase(CaseName, C) ->
-    nts_helpers:clear_tables(["device", "device_01", "events", "current"]),
+    nts_helpers:clear_tables(["device", "events", "current"]),
+    lists:map(fun nts_helpers:rmdev/1, [<<"01">>, <<"02">>, <<"03">>]),
     add_handlers(CaseName),
     C.
 
@@ -50,7 +51,7 @@ end_per_suite(_Config) ->
     application:stop(nts).
 
 handlers_for_testcase(_) ->
-    [{publish_state, {mod_redis, handle_publishstate, 60}}].
+    [].
 
 %%%===================================================================
 %%% tests
