@@ -39,7 +39,7 @@ init([]) ->
             start => {nts_tcp_sup, start_link, []}},
     Mods = #{id => module_manager,
              start => {nts_modules_sup, start_link, []}},
-    Children = [SysBus, Config, Hooks, Tcp, Mods],
+    Children = [SysBus, Tcp, Config, Hooks, Mods],
     {ok, { {one_for_one, 2, 20}, Children} }.
 
 %%====================================================================

@@ -50,9 +50,9 @@ reload() ->
 %%%===================================================================
 
 init([]) ->
-    Listeners = nts_config:get_value(listen),
+%%    Listeners = nts_config:get_value(listen),
     ets:new(tcp_listeners, [named_table, public, bag]),
-    setup_listeners(Listeners),
+%%    setup_listeners(Listeners),
     gen_event:add_sup_handler(system_bus, nts_tcp_eh, []),
     RestartStrategy = one_for_one,
     MaxRestarts = 10,
