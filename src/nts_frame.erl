@@ -28,12 +28,19 @@ parse(Dtype, Frame) ->
 parse(Dtype, Id, Frame, Dtm) when is_atom(Dtype) ->
     case nts_config:get_value([device_types, Dtype]) of
         undefined -> {error, config_not_found};
-        Settings -> parse(Settings, Id, Frame, Dtm)
-    end;
-parse(Settings, Id, Frame, Dtm) ->
+        Settings -> parse(Settings, Dtype, Id, Frame, Dtm)
+    end.
+
+parse(Settings, Dtype, Id, Frame, Dtm) ->
     Pmod = proplists:get_value(parser_mod, Settings),
-    F = Pmod:parse_frame(Frame),
-    F#frame{id = Id, received = Dtm}.
+    try Pmod:parse_frame(Frame) of
+        F ->
+            F#frame{id = Id, received = Dtm}
+    catch E:R ->
+        ?DEBUG("Error parsing frame: ~p:~p, parser module: ~p, data: ~p",
+            [E, R, Pmod, Frame]),
+        {parse_error, Frame, Dtype}
+    end.
 
 get(Key, Frame) ->
     maps:get(Key, Frame#frame.values, undefined).

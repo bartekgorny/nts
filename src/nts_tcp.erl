@@ -36,7 +36,7 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
             ProcFun = fun(D, {DevId0, Dev0}) ->
                           Frame = nts_frame:parse(DType, D),
                           {DeviceId, Device} = get_device(DevId0,
-                                                          Frame#frame.device,
+                                                          Frame,
                                                           Dev0,
                                                           Socket),
                           maybe_process_frame(Device, Frame),
@@ -62,9 +62,13 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
             exit(unexpected_tcp_termination)
     end.
 
+get_device(DevId, {parse_error, Data, DType}, _, _) ->
+    ?WARNING_MSG("Error while parsing frame for ~p device ~p, framedata: ~p",
+                 [DType, DevId, Data]),
+    {DevId, undefined};
 get_device(undefined, undefined, undefined, _) ->
     {undefined, undefined};
-get_device(undefined, DevId, undefined, Socket) ->
+get_device(undefined, #frame{device = DevId}, undefined, Socket) ->
     {ok, Dev} = nts_device:start_link(DevId, self(), Socket),
     {DevId, Dev};
 get_device(DevId, _, Dev, _) when is_pid(Dev) ->
