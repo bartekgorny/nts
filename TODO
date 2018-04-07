@@ -27,3 +27,6 @@ v redis eventy
 - cmdline API
 v zwrotka z urządzenia po otrzymaniu ramki
 v handle invalid locations (carry-forward coords)
+- release
+- emulator diwajsa
+- "big" testy
