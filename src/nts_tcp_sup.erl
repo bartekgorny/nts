@@ -87,9 +87,8 @@ stop_listener(Lspec) ->
 start_listener(Lspec) ->
     {DType, Proto, Port} = Lspec,
     ListenerSpec = ranch:child_spec(Lspec,
-                                    100,
                                     ranch_tcp,
-                                    [{port, Port}],
+                                    [{port, Port}, {num_acceptors, 100}],
                                     nts_tcp,
                                     []
                                    ),
