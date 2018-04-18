@@ -36,7 +36,8 @@ all() ->
         stabiliser,
         floatfilter,
         rewrite_buffered,
-        invalid_frame
+        invalid_frame,
+        event_frames
     ].
 
 init_per_suite(C) ->
