@@ -52,6 +52,11 @@ server(Socket, DType, Transport, Buffer, DevId, Dev) ->
             % listener being shut down
             gen_tcp:close(Socket),
             ok;
+        {'EXIT', Dev, {shutdown, idle_timeout}} ->
+            % this is normal
+            gen_tcp:close(Socket),
+            ?INFO_MSG("Device ~p stopped because of inactivity", [DevId]),
+            ok;
         {'EXIT', Dev, Reason} ->
             gen_tcp:close(Socket),
             ?ERROR_MSG("TCP terminated because ~p exited with '~p'", [DevId, Reason]),
