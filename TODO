@@ -28,5 +28,5 @@ v redis eventy
 v zwrotka z urządzenia po otrzymaniu ramki
 v handle invalid locations (carry-forward coords)
 - release
-- emulator diwajsa
+v emulator diwajsa
 - "big" testy
