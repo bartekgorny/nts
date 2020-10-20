@@ -1,9 +1,5 @@
 nts
 =====
 
-An OTP application
+New Track System - an experimental implementation of fleet tracking system, in Erlang.
 
-Build
------
-
-    $ rebar3 compile
